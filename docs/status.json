@@ -1,5 +1,5 @@
 {
-  "generated": "2026-07-10T19:56:41+00:00",
+  "generated": "2026-07-10T20:51:59+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -18,22 +18,9 @@
       "url": "https://iss.attract.reachmee.com/jobs",
       "ok": true,
       "consecutive_failures": 0,
-      "new_hits": 2,
-      "total_seen": 2
+      "new_hits": 0,
+      "total_seen": 0
     }
   ],
-  "recent_alerts": [
-    {
-      "time": "2026-07-10T19:56:41+00:00",
-      "target": "ISS portal",
-      "text": "Liker du variasjon, tempo og muligheten til å jobbe på ulike kjøkken? Vi søker faglærte kokker!",
-      "link": "https://iss.attract.reachmee.com/jobs/3672-liker-du-variasjon-tempo-og-muligheten-til-a"
-    },
-    {
-      "time": "2026-07-10T19:56:41+00:00",
-      "target": "ISS portal",
-      "text": "Liker du å jobbe med kortreist og bærekraftig mat? Vi søker kokk til jobb på dagtid i Lillestrøm!",
-      "link": "https://iss.attract.reachmee.com/jobs/3676-liker-du-a-jobbe-med-kortreist-og-baerekrafti"
-    }
-  ]
+  "recent_alerts": []
 }
