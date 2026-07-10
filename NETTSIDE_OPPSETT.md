@@ -52,7 +52,7 @@ To nivåer. VARSLING linja på tavla viser hva som er aktivt.
 2. Lag et app passord på myaccount.google.com/apppasswords.
 3. Legg inn to secrets i GitHub: `SMTP_USER` (epostadressen din) og `SMTP_PASS` (app passordet). Da sender skriptet eposten selv, og issue varselet skrus av automatisk så du slipper dobbelt.
 
-Mottaker er `email` feltet i config.json. Test lokalt med `python job_radar.py --test` (krever at smtp feltene i config.json eller miljøvariablene er satt).
+Mottaker er secret `ALERT_EMAIL` i GitHub (feltet `email` i config.json står tomt med vilje — repoet er public, og epostadressen skal ikke ligge i klartekst). Test lokalt med `python job_radar.py --test` (krever at smtp feltene i config.json eller miljøvariablene er satt).
 
 ---
 
