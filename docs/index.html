@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#131417">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>JOBBRADAR · Oslo</title>
+<style>
+  :root{
+    --bg:#131417;
+    --panel:#1a1c20;
+    --panel2:#202329;
+    --line:#2c3038;
+    --amber:#ffb100;        /* avviksgul */
+    --amber-dim:#8a6200;
+    --ok:#3ec97e;
+    --fail:#ff5049;
+    --ink:#ece9e0;
+    --mut:#8f96a0;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+    --body:"Avenir Next","Helvetica Neue","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:var(--bg);color:var(--ink);font-family:var(--body);
+    font-size:16px;line-height:1.45;
+    padding-bottom:60px;
+  }
+  body::before{ /* avviksstripe */
+    content:"";display:block;height:4px;
+    background:repeating-linear-gradient(45deg,var(--amber) 0 14px,#0d0d0f 14px 28px);
+  }
+
+  /* ---------- header / stasjonsklokke ---------- */
+  header{
+    position:sticky;top:0;z-index:30;
+    background:rgba(19,20,23,.94);backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);
+    padding:10px 14px 8px;
+  }
+  .hrow{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .brand{font-family:var(--mono);font-weight:700;letter-spacing:.22em;color:var(--amber);font-size:15px}
+  .brand small{color:var(--mut);letter-spacing:.18em;font-weight:400}
+  #klokke{font-family:var(--mono);font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .radarline{display:flex;align-items:center;gap:8px;margin-top:5px;font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--mut)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--mut);flex:0 0 auto}
+  .dot.live{background:var(--ok);animation:pulse 1.6s ease-in-out infinite}
+  .dot.stale{background:var(--amber)}
+  .dot.off{background:var(--fail)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  nav{display:flex;gap:6px;overflow-x:auto;margin-top:8px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  nav::-webkit-scrollbar{display:none}
+  nav a{
+    font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--mut);
+    text-decoration:none;border:1px solid var(--line);border-radius:3px;
+    padding:5px 9px;white-space:nowrap;
+  }
+  nav a:active{color:var(--amber);border-color:var(--amber)}
+
+  main{max-width:680px;margin:0 auto;padding:0 12px}
+
+  section{margin-top:26px;animation:inn .5s ease both}
+  section:nth-of-type(2){animation-delay:.05s}
+  section:nth-of-type(3){animation-delay:.1s}
+  section:nth-of-type(4){animation-delay:.15s}
+  section:nth-of-type(5){animation-delay:.2s}
+  section:nth-of-type(6){animation-delay:.25s}
+  @keyframes inn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  h2{
+    font-family:var(--mono);font-size:12px;font-weight:700;
+    letter-spacing:.3em;color:var(--mut);
+    display:flex;align-items:center;gap:10px;margin-bottom:10px;
+  }
+  h2::before,h2::after{content:"";height:1px;background:var(--line);flex:1}
+
+  /* ---------- tavle ---------- */
+  .board{
+    background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;
+    background-image:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.14) 3px 4px);
+  }
+  .brow{border-bottom:1px solid var(--line);padding:12px 12px 12px}
+  .brow:last-child{border-bottom:none}
+  .btop{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .dest{font-family:var(--mono);font-weight:700;font-size:17px;letter-spacing:.1em;color:var(--ink)}
+  .dest small{display:block;font-size:10.5px;font-weight:400;letter-spacing:.14em;color:var(--mut);margin-top:2px}
+  .flap{
+    font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.12em;
+    padding:6px 10px;border-radius:3px;border:1px solid var(--line);
+    background:linear-gradient(#26292f 49%, #1d2025 51%);color:var(--amber);
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.4);
+    appearance:none;-webkit-appearance:none;
+  }
+  select.flap{padding-right:22px;background-image:linear-gradient(#26292f 49%, #1d2025 51%);cursor:pointer}
+  .flap.apen{color:#0d0d0f;background:var(--amber);border-color:var(--amber)}
+  .flap.lukket{color:var(--mut)}
+  .flap.mulig{color:var(--ok)}
+  .bmeta{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:9px;font-family:var(--mono);font-size:11.5px;color:var(--mut);letter-spacing:.05em}
+  .bmeta b{color:var(--ink);font-weight:600}
+  .bmeta .warn{color:var(--fail)}
+  .bmeta .nytt{color:var(--amber)}
+  .bact{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  textarea.notat{
+    width:100%;margin-top:10px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;
+    color:var(--ink);font-family:var(--body);font-size:14px;padding:8px;min-height:38px;resize:vertical;
+  }
+  textarea.notat::placeholder{color:#5c626b}
+
+  .alerts{margin-top:10px}
+  .alert{
+    display:block;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);
+    border-radius:4px;padding:10px 12px;margin-bottom:8px;text-decoration:none;color:var(--ink);
+  }
+  .alert .at{font-family:var(--mono);font-size:10.5px;color:var(--mut);letter-spacing:.08em;display:block;margin-bottom:3px}
+  .tom{font-family:var(--mono);font-size:12px;color:var(--mut);letter-spacing:.06em;padding:10px 2px}
+
+  /* ---------- knapper ---------- */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    min-height:44px;padding:10px 14px;border-radius:4px;
+    border:1px solid var(--line);background:var(--panel2);color:var(--ink);
+    font-family:var(--mono);font-size:12.5px;letter-spacing:.08em;
+    text-decoration:none;cursor:pointer;user-select:none;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn.gul{background:var(--amber);border-color:var(--amber);color:#0d0d0f;font-weight:700}
+  .btn.smal{min-height:36px;padding:7px 11px;font-size:11.5px}
+  .btn .tag{font-size:9.5px;color:var(--fail);border:1px solid var(--fail);border-radius:2px;padding:1px 4px;letter-spacing:.1em}
+  .btnrad{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  @media(min-width:560px){.btnrad{grid-template-columns:1fr 1fr 1fr}}
+  .btnrad .btn{width:100%}
+
+  /* ---------- triage ---------- */
+  .triage{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}
+  .togg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .tg{
+    border:1px solid var(--line);border-radius:4px;background:var(--panel2);
+    padding:10px;cursor:pointer;user-select:none;min-height:56px;
+  }
+  .tg .pt{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--mut)}
+  .tg .lb{font-size:12.5px;color:var(--mut);margin-top:2px;line-height:1.3}
+  .tg.on{border-color:var(--amber)}
+  .tg.on .pt{color:var(--amber)}
+  .tg.on .lb{color:var(--ink)}
+  .tg.stopp.on{border-color:var(--fail)}
+  .tg.stopp.on .pt{color:var(--fail)}
+  .verdict{
+    margin-top:12px;border-radius:4px;padding:14px 12px;text-align:center;
+    font-family:var(--mono);letter-spacing:.14em;border:1px dashed var(--line);
+  }
+  .verdict .vs{font-size:22px;font-weight:700}
+  .verdict .vt{font-size:11.5px;margin-top:5px;letter-spacing:.06em}
+  .verdict.hoy{background:var(--amber);color:#0d0d0f;border-color:var(--amber)}
+  .verdict.med{color:var(--amber);border-color:var(--amber)}
+  .verdict.ign{color:var(--mut)}
+  .stoppord{font-size:12px;color:var(--mut);margin-top:10px;line-height:1.5}
+  .stoppord b{color:var(--ink);font-weight:600}
+
+  /* ---------- rutine ---------- */
+  .liste{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .liste h3{
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;color:var(--mut);
+    padding:9px 12px;border-bottom:1px solid var(--line);background:var(--panel2);
+    display:flex;justify-content:space-between;font-weight:600;
+  }
+  .li{
+    display:flex;align-items:center;gap:12px;padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;
+  }
+  .li:last-child{border-bottom:none}
+  .box{
+    width:20px;height:20px;flex:0 0 auto;border:1px solid var(--mut);border-radius:3px;
+    font-family:var(--mono);color:var(--amber);font-size:14px;line-height:18px;text-align:center;
+  }
+  .li.gjort .box{border-color:var(--amber)}
+  .li.gjort span{color:var(--mut);text-decoration:line-through}
+  .li span{font-size:14.5px}
+
+  /* ---------- utrykning ---------- */
+  ol.steg{list-style:none;counter-reset:s;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  ol.steg li{counter-increment:s;display:flex;gap:12px;padding:11px 12px;border-bottom:1px solid var(--line);font-size:14.5px}
+  ol.steg li:last-child{border-bottom:none}
+  ol.steg li::before{
+    content:counter(s,decimal-leading-zero);font-family:var(--mono);color:var(--amber);
+    font-size:12px;font-weight:700;padding-top:2px;letter-spacing:.05em;
+  }
+  ol.steg b{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--mut);display:block}
+  .kopi{margin-top:12px;display:grid;gap:8px}
+
+  /* ---------- vinduer ---------- */
+  .vind{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .vrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line)}
+  .vrow:last-child{border-bottom:none}
+  .vrow .vn{font-size:14px}
+  .vrow .vn small{display:block;color:var(--mut);font-size:12px;margin-top:1px}
+  .vrow .vd{font-family:var(--mono);font-size:12px;color:var(--amber);white-space:nowrap;letter-spacing:.05em}
+
+  .fotnote{font-size:12px;color:var(--mut);margin-top:10px;line-height:1.5}
+  .fotnote code{font-family:var(--mono);color:var(--ink);font-size:11.5px}
+
+  #lagringsvarsel{
+    display:none;margin:14px 12px 0;max-width:656px;margin-inline:auto;
+    border:1px dashed var(--amber-dim);color:var(--amber);border-radius:4px;
+    font-family:var(--mono);font-size:11.5px;padding:9px 11px;letter-spacing:.04em;
+  }
+
+  footer{
+    margin-top:34px;padding:16px 14px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:10.5px;color:var(--mut);letter-spacing:.12em;text-align:center;
+  }
+  @media(prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+  :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <div class="brand">JOBBRADAR <small>· OSLO</small></div>
+    <div id="klokke">--:--:--</div>
+  </div>
+  <div class="radarline"><span class="dot off" id="rdot"></span><span id="rtekst">RADAR: SJEKKER…</span></div>
+  <div class="radarline" id="kanallinje" style="display:none"><span class="dot" id="kdot"></span><span id="ktekst"></span></div>
+  <nav>
+    <a href="#tavle">TAVLE</a><a href="#triage">TRIAGE</a><a href="#rutine">RUTINE</a>
+    <a href="#utrykning">UTRYKNING</a><a href="#lenker">LENKER</a><a href="#vinduer">VINDUER</a>
+  </nav>
+</header>
+
+<div id="lagringsvarsel">LAGRING UTILGJENGELIG I DENNE VISNINGEN. ÅPNE SIDEN LOKALT ELLER PÅ GITHUB PAGES FOR VARIG LAGRING.</div>
+
+<main>
+
+  <!-- ================= TAVLE ================= -->
+  <section id="tavle">
+    <h2>TAVLE</h2>
+    <div class="board">
+
+      <div class="brow" data-maal="vy">
+        <div class="btop">
+          <div class="dest">VY · KUNDEVEILEDER<small>OSLO / OSLO S / SKI</small></div>
+          <select class="flap" data-felt="status" aria-label="Status Vy">
+            <option value="UKJENT">UKJENT</option><option value="ÅPEN">ÅPEN</option>
+            <option value="MULIG">MULIG</option><option value="LUKKET">LUKKET</option>
+          </select>
+        </div>
+        <div class="bmeta">
+          <span>RADAR: <b data-auto="radar">ingen data</b></span>
+          <span>NYE TREFF: <b data-auto="nytt">0</b></span>
+          <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
+        </div>
+        <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: Vy tog filteret sjekket, den ene utlysningen var …"></textarea>
+        <div class="bact">
+          <button class="btn smal gul" data-stemple>Stemple sjekket nå</button>
+          <a class="btn smal" href="https://www.vy.no/vygruppen/karriere-i-vy/ledige-stillinger" target="_blank" rel="noopener">Åpne karrieresiden</a>
+        </div>
+      </div>
+
+      <div class="brow" data-maal="iss">
+        <div class="btop">
+          <div class="dest">ISS · ASSISTANSE<small>OSLO LUFTHAVN / OSL</small></div>
+          <select class="flap" data-felt="status" aria-label="Status ISS">
+            <option value="UKJENT">UKJENT</option><option value="ÅPEN">ÅPEN</option>
+            <option value="MULIG">MULIG</option><option value="LUKKET">LUKKET</option>
+          </select>
+        </div>
+        <div class="bmeta">
+          <span>RADAR: <b data-auto="radar">ingen data</b></span>
+          <span>NYE TREFF: <b data-auto="nytt">0</b></span>
+          <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
+        </div>
+        <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: ny portal funnet via Finn annonse, åpen søknad sendt …"></textarea>
+        <div class="bact">
+          <button class="btn smal gul" data-stemple>Stemple sjekket nå</button>
+          <a class="btn smal" href="https://iss.attract.reachmee.com/jobs" target="_blank" rel="noopener">Åpne portalen</a>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="alerts" id="alerts"><div class="tom">INGEN RADARTREFF LASTET.</div></div>
+    <div class="bact" style="margin-top:10px">
+      <button class="btn smal" id="oppdater">Last radarstatus på nytt</button>
+    </div>
+    <p class="fotnote">Tavla har to lag. Radarlinjene fylles automatisk fra <code>status.json</code> når siden kjører på GitHub Pages sammen med radaren. Status, notat og stempel er ditt manuelle lag og lagres i nettleseren. Varslene på epost og push er alarmen, denne siden er cockpiten. VARSLING linja øverst viser hvilke kanaler som er aktive.</p>
+  </section>
+
+  <!-- ================= TRIAGE ================= -->
+  <section id="triage">
+    <h2>TRIAGE</h2>
+    <div class="triage">
+      <div class="togg">
+        <div class="tg" data-p="3"><div class="pt">+3</div><div class="lb">Selskap: Vy tog / Vygruppen eller ISS</div></div>
+        <div class="tg" data-p="3"><div class="pt">+3</div><div class="lb">Rolle: kundeveileder, stasjonsvert, kundevert eller assistanse, PRM, flyplassmedarbeider</div></div>
+        <div class="tg" data-p="2"><div class="pt">+2</div><div class="lb">Sted: Oslo, Oslo S, Ski eller OSL, Gardermoen, Ullensaker</div></div>
+        <div class="tg" data-p="2"><div class="pt">+2</div><div class="lb">Oppgaver: buss for tog, avvik, reiseinfo eller rullestol, ledsage, nedsatt funksjonsevne</div></div>
+        <div class="tg stopp" data-stopp style="grid-column:1/-1"><div class="pt">STOPP</div><div class="lb">Stoppord til stede (se lista under)</div></div>
+      </div>
+      <div class="verdict ign" id="verdict"><div class="vs">0 / 10</div><div class="vt">IGNORER</div></div>
+      <div class="bact" style="margin-top:10px"><button class="btn smal" id="nullstillTriage">Nullstill</button></div>
+      <p class="stoppord"><b>Stoppord:</b> renhold, kantine, kokk, catering, vekter, sikkerhetskontrollør, lokfører, konduktør, bussjåfør, kundesenter, bank, butikk, varemottak, gjenvinning, avfall, utvikler, IT, manager, leder.</p>
+    </div>
+  </section>
+
+  <!-- ================= RUTINE ================= -->
+  <section id="rutine">
+    <h2>RUTINE</h2>
+    <div class="liste" id="daglig">
+      <h3><span>DAGLIG · 2 MIN</span><span>nullstilles hver dag</span></h3>
+      <div class="li" data-id="d1"><div class="box"></div><span>Sjekket varsler (ntfy, Finn push, epost)</span></div>
+      <div class="li" data-id="d2"><div class="box"></div><span>Alt som pinget er triagert eller ignorert</span></div>
+    </div>
+    <div style="height:10px"></div>
+    <div class="liste" id="ukentlig">
+      <h3><span>UKENTLIG · MANDAG · 8 MIN</span><span>nullstilles hver uke</span></h3>
+      <div class="li" data-id="u1"><div class="box"></div><span>Begge karrieresidene åpnet manuelt</span></div>
+      <div class="li" data-id="u2"><div class="box"></div><span>Siste Actions kjøring er grønn</span></div>
+      <div class="li" data-id="u3"><div class="box"></div><span>Tavla stemplet og tracker.md oppdatert</span></div>
+      <div class="li" data-id="u4"><div class="box"></div><span>Oppfølging vurdert (svar som venter?)</span></div>
+    </div>
+  </section>
+
+  <!-- ================= UTRYKNING ================= -->
+  <section id="utrykning">
+    <h2>UTRYKNING · 15 MIN</h2>
+    <ol class="steg">
+      <li><div><b>MINUTT 0 TIL 2</b>Les HELE annonsen. Noter frist, ordet fortløpende, kontaktperson, portal.</div></li>
+      <li><div><b>2 TIL 5</b>Kopier riktig søknad under, bytt tittel, speil to formuleringer fra annonsen. Aldri send umodifisert.</div></li>
+      <li><div><b>5 TIL 7</b>CV sjekk. Riktig filnavn, riktig versjon.</div></li>
+      <li><div><b>7 TIL 12</b>Send i portalen. Skjermbilde av bekreftelsen.</div></li>
+      <li><div><b>12 TIL 15</b>Oppdater tavla og tracker, send melding til kontaktperson, sett påminnelse fem dager frem.</div></li>
+    </ol>
+    <div class="kopi">
+      <button class="btn" data-kopier="vy">Kopier Vy søknaden</button>
+      <button class="btn" data-kopier="iss">Kopier ISS søknaden</button>
+      <button class="btn" data-kopier="melding">Kopier melding til kontaktperson</button>
+    </div>
+    <p class="fotnote">ISS brevet har en setning i klammer for åpen søknad. Slett den hvis du svarer på en utlysning. Etterpå: tilbake til livet. Ikke refresh innboksen hvert kvarter.</p>
+  </section>
+
+  <!-- ================= LENKER ================= -->
+  <section id="lenker">
+    <h2>LENKER</h2>
+    <div class="btnrad">
+      <a class="btn" href="https://www.vy.no/vygruppen/karriere-i-vy/ledige-stillinger" target="_blank" rel="noopener">Vy karriere</a>
+      <a class="btn" href="https://iss.attract.reachmee.com/jobs" target="_blank" rel="noopener">ISS portal</a>
+      <a class="btn" href="https://www.finn.no/job/search?q=kundeveileder" target="_blank" rel="noopener">Finn: kundeveileder</a>
+      <a class="btn" href="https://www.finn.no/job/search?q=assistansetjenesten" target="_blank" rel="noopener">Finn: assistanse</a>
+      <a class="btn" href="https://www.finn.no/job/search?q=flyplassmedarbeider" target="_blank" rel="noopener">Finn: flyplass</a>
+      <a class="btn" href="https://arbeidsplassen.nav.no/stillinger?q=kundeveileder" target="_blank" rel="noopener">NAV: kundeveileder</a>
+      <a class="btn" href="https://arbeidsplassen.nav.no/stillinger?q=assistanse%20lufthavn" target="_blank" rel="noopener">NAV: assistanse</a>
+      <a class="btn" href="https://www.linkedin.com/jobs/search/?keywords=kundeveileder&location=Oslo" target="_blank" rel="noopener">LinkedIn søk</a>
+    </div>
+  </section>
+
+  <!-- ================= VINDUER ================= -->
+  <section id="vinduer">
+    <h2>VINDUER</h2>
+    <div class="vind">
+      <div class="vrow"><div class="vn">Høst 2026 supplering, Vy<small>mulig, ikke garantert. Radaren fanger den</small></div><div class="vd" data-frist="2026-09-01">–</div></div>
+      <div class="vrow"><div class="vn">ISS vikarbatch<small>historisk utlyst rundt desember og januar</small></div><div class="vd" data-frist="2026-12-01">–</div></div>
+      <div class="vrow"><div class="vn">Vy hovedbatch for sommer 2027<small>vinter og tidlig vår</small></div><div class="vd" data-frist="2027-02-01">–</div></div>
+      <div class="vrow"><div class="vn">ISS tilkalling<small>dukker opp hele året, fortløpende vurdering, fart teller</small></div><div class="vd">LØPENDE</div></div>
+    </div>
+    <p class="fotnote">Menneskekanalen slår alle vinduene: teamleder i assistansetjenesten på jobb, kundeveileder i gul vest på Oslo S. Navn først, søknad etterpå.</p>
+  </section>
+
+</main>
+
+<footer>JOBBRADAR · BYGD 09.07.2026 · MASKINEN VARSLER, DU SØKER</footer>
+
+<script>
+/* ---------- trygg lagring: localStorage der det finnes, minne ellers ---------- */
+const store=(()=>{
+  let ok=true, mem={};
+  try{ localStorage.setItem("__t","1"); localStorage.removeItem("__t"); }
+  catch(e){ ok=false; }
+  return {
+    ok,
+    get(k,f){ try{ if(ok){ const v=localStorage.getItem(k); return v===null?f:JSON.parse(v); } }catch(e){} return (k in mem)?mem[k]:f; },
+    set(k,v){ try{ if(ok){ localStorage.setItem(k,JSON.stringify(v)); return; } }catch(e){} mem[k]=v; }
+  };
+})();
+if(!store.ok) document.getElementById("lagringsvarsel").style.display="block";
+
+/* ---------- klokke ---------- */
+const kl=document.getElementById("klokke");
+function tikk(){ kl.textContent=new Date().toLocaleTimeString("nb-NO",{hour:"2-digit",minute:"2-digit",second:"2-digit"}); }
+tikk(); setInterval(tikk,1000);
+
+/* ---------- radarstatus fra status.json ---------- */
+const rdot=document.getElementById("rdot"), rtekst=document.getElementById("rtekst");
+const alertsEl=document.getElementById("alerts");
+const kanallinje=document.getElementById("kanallinje"), kdot=document.getElementById("kdot"), ktekst=document.getElementById("ktekst");
+
+function visKanaler(ch){
+  if(!ch){ kanallinje.style.display="none"; return; }
+  const paa=ch.email||ch.push;
+  kanallinje.style.display="flex";
+  kdot.className="dot "+(paa?"live":"off");
+  ktekst.textContent="VARSLING: EPOST "+(ch.email?"PÅ":"AV")+" · PUSH "+(ch.push?"PÅ":"AV")+(paa?"":" · INGEN KANAL AKTIV");
+}
+
+/* radartreff er skrapt fra eksterne sider — aldri rå HTML inn i tavla */
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const trygLenke=u=>/^https?:\/\//i.test(u)?esc(u):"#";
+
+function relTid(iso){
+  const m=Math.round((Date.now()-Date.parse(iso))/60000);
+  if(isNaN(m)) return "ukjent tid";
+  if(m<1) return "nå nettopp";
+  if(m<60) return m+" min siden";
+  const t=Math.round(m/60);
+  if(t<48) return t+" t siden";
+  return Math.round(t/24)+" d siden";
+}
+
+function visMaalAuto(navnRegex,data){
+  const rad=[...document.querySelectorAll(".brow")].find(r=>navnRegex.test(r.dataset.maal));
+  if(!rad) return;
+  const t=(data.targets||[]).find(x=>navnRegex.test(x.name||""));
+  const rEl=rad.querySelector('[data-auto="radar"]'), nEl=rad.querySelector('[data-auto="nytt"]');
+  if(!t){ rEl.textContent="ikke i status"; return; }
+  if(t.ok){ rEl.textContent="OK"; rEl.classList.remove("warn"); }
+  else{ rEl.textContent="FEIL x"+(t.consecutive_failures||1); rEl.classList.add("warn"); }
+  nEl.textContent=t.new_hits||0;
+  if((t.new_hits||0)>0) nEl.classList.add("nytt");
+}
+
+async function lastStatus(){
+  rtekst.textContent="RADAR: SJEKKER…";
+  try{
+    const r=await fetch("./status.json",{cache:"no-store"});
+    if(!r.ok) throw 0;
+    const d=await r.json();
+    const min=Math.round((Date.now()-Date.parse(d.generated))/60000);
+    if(min<=45){ rdot.className="dot live"; rtekst.textContent="RADAR: TILKOBLET · KJØRTE "+relTid(d.generated).toUpperCase(); }
+    else{ rdot.className="dot stale"; rtekst.textContent="RADAR: GAMMEL DATA · "+relTid(d.generated).toUpperCase()+" · SJEKK ACTIONS"; }
+    visKanaler(d.channels);
+    visMaalAuto(/vy/i,d); visMaalAuto(/iss/i,d);
+    const al=(d.recent_alerts||[]).slice(0,8);
+    alertsEl.innerHTML = al.length
+      ? al.map(a=>`<a class="alert" href="${trygLenke(a.link)}" target="_blank" rel="noopener"><span class="at">${esc((a.target||"").toUpperCase())} · ${relTid(a.time).toUpperCase()}</span>${esc(a.text)}</a>`).join("")
+      : `<div class="tom">INGEN TREFF I RADARLOGGEN. STILLE ER OGSÅ ET SVAR.</div>`;
+  }catch(e){
+    rdot.className="dot off";
+    rtekst.textContent="RADAR: FRAKOBLET · SIDEN VIRKER, MEN UTEN SANNTID";
+    visKanaler(null);
+    alertsEl.innerHTML=`<div class="tom">FANT IKKE status.json. KJØR SIDEN PÅ GITHUB PAGES SAMMEN MED RADAREN FOR SANNTID.</div>`;
+  }
+}
+document.getElementById("oppdater").addEventListener("click",lastStatus);
+lastStatus();
+
+/* ---------- manuelt lag på tavla ---------- */
+function fargFlap(sel){
+  sel.classList.remove("apen","lukket","mulig");
+  if(sel.value==="ÅPEN") sel.classList.add("apen");
+  if(sel.value==="LUKKET") sel.classList.add("lukket");
+  if(sel.value==="MULIG") sel.classList.add("mulig");
+}
+document.querySelectorAll(".brow").forEach(rad=>{
+  const key="radar.maal."+rad.dataset.maal;
+  const d=store.get(key,{status:"UKJENT",notat:"",sist:"aldri"});
+  const sel=rad.querySelector('[data-felt="status"]');
+  const notat=rad.querySelector('[data-felt="notat"]');
+  const sist=rad.querySelector('[data-felt="sist"]');
+  sel.value=d.status; fargFlap(sel); notat.value=d.notat; sist.textContent=d.sist;
+  const lagre=()=>store.set(key,{status:sel.value,notat:notat.value,sist:sist.textContent});
+  sel.addEventListener("change",()=>{fargFlap(sel);lagre();});
+  notat.addEventListener("input",lagre);
+  rad.querySelector("[data-stemple]").addEventListener("click",()=>{
+    sist.textContent=new Date().toLocaleString("nb-NO",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+    lagre();
+  });
+});
+
+/* ---------- triage ---------- */
+const tgs=[...document.querySelectorAll(".tg")], verdict=document.getElementById("verdict");
+function regnTriage(){
+  const stopp=tgs.some(t=>t.dataset.stopp!==undefined&&t.classList.contains("on"));
+  let p=0; tgs.forEach(t=>{ if(t.dataset.p&&t.classList.contains("on")) p+=Number(t.dataset.p); });
+  let kl="ign", vs=p+" / 10", vt="IGNORER";
+  if(stopp){ vs="STOPPORD"; vt="IGNORER. RETT SELSKAP OG POSTNUMMER ER IKKE RETT JOBB"; }
+  else if(p>=8){ kl="hoy"; vt="HØY · UTRYKNING NÅ, IKKE ETTER TRENING"; }
+  else if(p>=5){ kl="med"; vt="MEDIUM · ÅPNE OG LES INNEN EN TIME"; }
+  verdict.className="verdict "+kl;
+  verdict.innerHTML=`<div class="vs">${vs}</div><div class="vt">${vt}</div>`;
+}
+tgs.forEach(t=>t.addEventListener("click",()=>{t.classList.toggle("on");regnTriage();}));
+document.getElementById("nullstillTriage").addEventListener("click",()=>{tgs.forEach(t=>t.classList.remove("on"));regnTriage();});
+regnTriage();
+
+/* ---------- rutiner med selvnullstilling ---------- */
+function dagN(){ return new Date().toISOString().slice(0,10); }
+function ukeN(){
+  const d=new Date(); const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const dag=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-dag);
+  const start=new Date(Date.UTC(t.getUTCFullYear(),0,1));
+  return t.getUTCFullYear()+"-U"+Math.ceil((((t-start)/86400000)+1)/7);
+}
+function kobleListe(id,nkl){
+  const el=document.getElementById(id), key="radar.liste."+id;
+  let d=store.get(key,{n:nkl(),v:{}});
+  if(d.n!==nkl()) d={n:nkl(),v:{}};
+  el.querySelectorAll(".li").forEach(li=>{
+    const iid=li.dataset.id;
+    const sett=()=>{ const p=!!d.v[iid]; li.classList.toggle("gjort",p); li.querySelector(".box").textContent=p?"✕":""; };
+    sett();
+    li.addEventListener("click",()=>{ d.v[iid]=!d.v[iid]; store.set(key,d); sett(); });
+  });
+  store.set(key,d);
+}
+kobleListe("daglig",dagN);
+kobleListe("ukentlig",ukeN);
+
+/* ---------- brev og meldinger ---------- */
+const tekster={
+vy:`Jeg jobber som servicemedarbeider hos SAS Ground Handling på Oslo lufthavn og søker med dette stillingen som kundeveileder hos Vy.
+
+I jobben min i dag hjelper jeg passasjerer gjennom forsinkelser, kanselleringer og travle perioder. Jeg er vant til å gi tydelig beskjed til stressede reisende og holde roen når planene endrer seg. Kollegene og jeg løser det sammen når det står på som verst. Kundeveilederrollen handler om akkurat det samme, bare på stasjon i stedet for flyplass.
+
+Jeg pendler selv gjennom Oslo S og kjenner stasjonen, avvikene og buss for tog fra kundesiden. Jeg liker å møte folk og gjøre en kaotisk reisedag litt enklere for dem. Norsk og engelsk flytende, vant til uniform, tidlige morgener og all slags vær.
+
+Jeg studerer informasjonsteknologi ved OsloMet og ser etter en jobb som lar seg kombinere med studiene. Jeg er fleksibel på arbeidstid og kan stille på kort varsel.
+
+Med vennlig hilsen
+Fardin Chaudhary
++47 988 96 868 / chaudharyfardin@gmail.com`,
+
+iss:`Jeg jobber allerede på Oslo lufthavn, som servicemedarbeider hos SAS Ground Handling, og vil gjerne over i assistansetjenesten hos ISS. [Jeg sender denne som åpen søknad siden tjenesten ikke har en aktiv utlysning akkurat nå.]
+
+Terminalen og tempoet på OSL kjenner jeg fra innsiden, og sikkerhetsrutinene er hverdag for meg. Jeg har gjennomført bakgrunnssjekk, har adgangskort på lufthavnen i dag og førerkort klasse B, så oppstart går raskt.
+
+Det jeg liker best i jobben min er situasjonene der reisende trenger litt ekstra hjelp. Å følge noen trygt gjennom en stor og stressende flyplass er meningsfylt arbeid, og det er den rollen på OSL jeg helst vil ha. Jeg er tålmodig, har godt humør og er trygg på å kommunisere på norsk og engelsk, også når det er forsinkelser og kø.
+
+Jeg trener fast og har fysikken jobben krever. Jeg studerer ved OsloMet og er fleksibel på turnus, helger og tidlige vakter. Jeg er interessert i både fast stilling, vikariat og tilkalling.
+
+Med vennlig hilsen
+Fardin Chaudhary
++47 988 96 868 / chaudharyfardin@gmail.com`,
+
+melding:`Hei [navn],
+
+jeg har nettopp søkt på stillingen som [tittel] via [portal]. Kort om meg: jeg jobber i dag med passasjerservice hos SAS Ground Handling på Oslo lufthavn, snakker norsk og engelsk, og kan starte raskt. Denne rollen er den jeg faktisk vil ha, så jeg ville si det direkte også.
+
+Ta gjerne kontakt om du vil vite mer.
+
+Mvh
+Fardin Chaudhary, +47 988 96 868`
+};
+
+async function kopier(t,btn){
+  try{ await navigator.clipboard.writeText(t); }
+  catch(e){
+    const ta=document.createElement("textarea"); ta.value=t; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy"); ta.remove();
+  }
+  const org=btn.textContent; btn.textContent="Kopiert ✓";
+  setTimeout(()=>btn.textContent=org,1400);
+}
+document.querySelectorAll("[data-kopier]").forEach(b=>{
+  b.addEventListener("click",()=>kopier(tekster[b.dataset.kopier],b));
+});
+
+/* ---------- vinduer nedtelling ---------- */
+document.querySelectorAll("[data-frist]").forEach(el=>{
+  const d=Math.ceil((Date.parse(el.dataset.frist)-Date.now())/86400000);
+  el.textContent = d>1 ? "OM "+d+" DAGER" : (d>=-90 ? "NÅ" : "PASSERT");
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+{
+  "email": "chaudharyfardin@gmail.com",
+  "smtp": {
+    "user": "",
+    "pass": ""
+  },
+  "ntfy_topic": "CHANGE ME - sett topic som secret NTFY_TOPIC i GitHub, eller lim inn her for lokal bruk",
+  "telegram": {
+    "bot_token": "",
+    "chat_id": ""
+  },
+  "targets": [
+    {
+      "name": "Vy karriere",
+      "type": "webcruiter",
+      "silo": 23151000,
+      "url": "https://www.vy.no/vygruppen/karriere-i-vy/ledige-stillinger",
+      "keywords": [
+        "kundeveileder",
+        "stasjonsvert",
+        "kundevert",
+        "servicevert",
+        "kundebehandler"
+      ]
+    },
+    {
+      "name": "ISS portal",
+      "url": "https://iss.attract.reachmee.com/jobs",
+      "keywords": [
+        "assistanse",
+        "prm",
+        "flyplass",
+        "lufthavn",
+        "gardermoen",
+        "ledsager",
+        "aviation"
+      ]
+    }
+  ]
+}

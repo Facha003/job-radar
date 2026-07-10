@@ -1,0 +1,26 @@
+{
+  "generated": "2026-07-10T18:46:42+00:00",
+  "channels": {
+    "email": false,
+    "push": false
+  },
+  "targets": [
+    {
+      "name": "Vy karriere",
+      "url": "https://www.vy.no/vygruppen/karriere-i-vy/ledige-stillinger",
+      "ok": true,
+      "consecutive_failures": 0,
+      "new_hits": 0,
+      "total_seen": 0
+    },
+    {
+      "name": "ISS portal",
+      "url": "https://iss.attract.reachmee.com/jobs",
+      "ok": true,
+      "consecutive_failures": 0,
+      "new_hits": 0,
+      "total_seen": 0
+    }
+  ],
+  "recent_alerts": []
+}

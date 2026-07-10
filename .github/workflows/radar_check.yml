@@ -1,0 +1,79 @@
+# Job Radar workflow, versjon 2 (also commits docs/status.json for the dashboard).
+# This file must live at: .github/workflows/radar_check.yml in your repo.
+# job_radar.py and config.json go in the repo root. docs/index.html is the dashboard.
+#
+# One time setup in the repo:
+#   Settings -> Actions -> General -> Workflow permissions -> "Read and write permissions"
+#   Settings -> Secrets and variables -> Actions -> new secret NTFY_TOPIC
+#     (keeps the topic out of config.json so the repo can be PUBLIC,
+#      which free GitHub Pages requires)
+#   Settings -> Pages -> Deploy from a branch -> main -> /docs
+#
+# GitHub cron is best effort and can lag 5 to 15 minutes. Fine for this use case.
+
+name: job radar
+
+on:
+  schedule:
+    # odd minutes on purpose: GitHub queues :00/:30 jobs behind everyone else's
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+# never let a cron run and a manual run push at the same time
+concurrency:
+  group: job-radar
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run radar
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+        run: python job_radar.py
+
+      # Email with zero secrets: open one issue per run with new hits.
+      # GitHub notifies the repo owner about new issues by email.
+      # Skipped when SMTP is configured, so you never get double emails.
+      - name: Email via GitHub issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+        run: |
+          if [ -n "$SMTP_PASS" ]; then echo "SMTP aktiv, hopper over issue-varsel"; exit 0; fi
+          count=$(jq length run_alerts.json)
+          if [ "$count" -eq 0 ]; then echo "ingen nye treff"; exit 0; fi
+          title=$(jq -r '.[0].text' run_alerts.json)
+          if [ "$count" -gt 1 ]; then title="$title (+$((count-1)) til)"; fi
+          body=$(jq -r '.[] | "- [\(.text)](\(.link)) — \(.target)"' run_alerts.json)
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "🚨 MULIG TREFF: $title" \
+            --body "$body
+
+          Radaren fant dette $(date -u +'%d.%m.%Y %H:%M') UTC. Triager på tavla, utrykning hvis HØY."
+
+      - name: Persist state and status
+        run: |
+          git config user.name "radar-bot"
+          git config user.email "radar-bot@users.noreply.github.com"
+          git add seen.json docs/status.json
+          git diff --cached --quiet || (git commit -m "radar update" && git pull --rebase origin main && git push)
