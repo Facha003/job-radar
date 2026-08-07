@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-07T08:18:59+00:00",
+  "generated": "2026-08-07T09:34:22+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -18,7 +18,7 @@
       "url": "https://iss.attract.reachmee.com/jobs",
       "ok": true,
       "consecutive_failures": 0,
-      "new_hits": 1,
+      "new_hits": 0,
       "total_seen": 1
     }
   ],
