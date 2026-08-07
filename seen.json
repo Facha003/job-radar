@@ -1,8 +1,17 @@
 {
-  "seen": [],
+  "seen": [
+    "ISS portal|https://iss.attract.reachmee.com/jobs/3690-bli-en-del-av-det-nye-servicesenteret-pa-oslo"
+  ],
   "fail": {
     "Vy karriere": 0,
     "ISS portal": 0
   },
-  "alerts": []
+  "alerts": [
+    {
+      "time": "2026-08-07T08:18:59+00:00",
+      "target": "ISS portal",
+      "text": "Bli en del av det nye Servicesenteret på Oslo lufthavn!",
+      "link": "https://iss.attract.reachmee.com/jobs/3690-bli-en-del-av-det-nye-servicesenteret-pa-oslo"
+    }
+  ]
 }
