@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-12T05:59:27+00:00",
+  "generated": "2026-08-12T07:43:05+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -10,8 +10,8 @@
       "url": "https://www.vy.no/vygruppen/karriere-i-vy/ledige-stillinger",
       "ok": true,
       "consecutive_failures": 0,
-      "new_hits": 0,
-      "total_seen": 0
+      "new_hits": 1,
+      "total_seen": 1
     },
     {
       "name": "ISS portal",
@@ -23,6 +23,12 @@
     }
   ],
   "recent_alerts": [
+    {
+      "time": "2026-08-12T07:43:04+00:00",
+      "target": "Vy karriere",
+      "text": "Kundeveileder (Oslo) · frist 26.08",
+      "link": "https://23151000.webcruiter.no/Main/Recruit/Public/5164307165?language=en&link_source_id=0"
+    },
     {
       "time": "2026-08-07T08:18:59+00:00",
       "target": "ISS portal",

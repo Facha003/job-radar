@@ -1,12 +1,19 @@
 {
   "seen": [
-    "ISS portal|https://iss.attract.reachmee.com/jobs/3690-bli-en-del-av-det-nye-servicesenteret-pa-oslo"
+    "ISS portal|https://iss.attract.reachmee.com/jobs/3690-bli-en-del-av-det-nye-servicesenteret-pa-oslo",
+    "Vy karriere|webcruiter|5164307165"
   ],
   "fail": {
     "Vy karriere": 0,
     "ISS portal": 0
   },
   "alerts": [
+    {
+      "time": "2026-08-12T07:43:04+00:00",
+      "target": "Vy karriere",
+      "text": "Kundeveileder (Oslo) · frist 26.08",
+      "link": "https://23151000.webcruiter.no/Main/Recruit/Public/5164307165?language=en&link_source_id=0"
+    },
     {
       "time": "2026-08-07T08:18:59+00:00",
       "target": "ISS portal",
