@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-12T07:43:05+00:00",
+  "generated": "2026-08-12T09:18:34+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -10,7 +10,7 @@
       "url": "https://www.vy.no/vygruppen/karriere-i-vy/ledige-stillinger",
       "ok": true,
       "consecutive_failures": 0,
-      "new_hits": 1,
+      "new_hits": 0,
       "total_seen": 1
     },
     {
