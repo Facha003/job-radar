@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-10T09:05:55+00:00",
+  "generated": "2026-09-10T13:30:52+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -16,8 +16,8 @@
     {
       "name": "ISS portal",
       "url": "https://iss.attract.reachmee.com/jobs",
-      "ok": false,
-      "consecutive_failures": 1,
+      "ok": true,
+      "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 1
     }
