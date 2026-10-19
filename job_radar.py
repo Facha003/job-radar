@@ -302,12 +302,19 @@ def main():
     alerts = state.get("alerts", [])
 
     if "--test" in sys.argv:
+        title = "TEST · Servicemedarbeider (Gardermoen) · varslingen virker"
+        link = "https://careers.sasgroup.net/search/?q=&locationsearch=Gardermoen"
         notify(
             cfg,
             "Jobbradar: test",
             "Varsling virker. Ekte varsler ser slik ut, med tittel, sted og frist.",
-            "https://www.vy.no/vygruppen/karriere-i-vy/ledige-stillinger",
+            link,
         )
+        # Same file the workflow turns into an issue, so the test goes through
+        # the real email path. seen.json and status.json are left untouched.
+        save_json(BASE / "run_alerts.json", [
+            {"time": now_iso(), "target": "TEST", "text": title, "link": link}
+        ])
         return
 
     run_report = []

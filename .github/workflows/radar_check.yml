@@ -18,6 +18,11 @@ on:
     # odd minutes on purpose: GitHub queues :00/:30 jobs behind everyone else's
     - cron: "7,37 * * * *"
   workflow_dispatch:
+    inputs:
+      test_alert:
+        description: "Send a test alert through the real email path (no scraping)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -49,7 +54,7 @@ jobs:
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
-        run: python job_radar.py
+        run: python job_radar.py ${{ inputs.test_alert && '--test' || '' }}
 
       # Email with zero secrets: open one issue per run with new hits.
       # GitHub notifies the repo owner about new issues by email.
