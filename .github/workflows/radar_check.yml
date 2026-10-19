@@ -71,7 +71,6 @@ jobs:
           if [ "$count" -gt 1 ]; then title="$title (+$((count-1)) til)"; fi
           body=$(jq -r '.[] | "- [\(.text)](\(.link)) — \(.target)"' run_alerts.json)
           gh issue create --repo "$GITHUB_REPOSITORY" \
-            --assignee "$GITHUB_REPOSITORY_OWNER" \
             --title "🚨 MULIG TREFF: $title" \
             --body "@$GITHUB_REPOSITORY_OWNER
           $body
