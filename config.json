@@ -35,6 +35,23 @@
         "ledsager",
         "aviation"
       ]
+    },
+    {
+      "name": "SAS Ground Handling",
+      "url": "https://careers.sasgroup.net/search/?q=&locationsearch=Gardermoen",
+      "keywords": [
+        "servicemedarbeider",
+        "passasjer",
+        "check-in",
+        "innsjekk",
+        "kundeservice",
+        "service agent",
+        "landside"
+      ],
+      "exclude_keywords": ["manager", "leder", "supervisor"],
+      "href_must_contain": ["/job/gardermoen", "/job/oslo", "/job/ullensaker"],
+      "page_text_fallback": false,
+      "sanity_href": "/job/"
     }
   ]
 }

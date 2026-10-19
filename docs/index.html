@@ -280,6 +280,26 @@
         </div>
       </div>
 
+      <div class="brow" data-maal="sas">
+        <div class="btop">
+          <div class="dest">SAS GH · SERVICEMEDARBEIDER<small>INNSJEKK OG BAGASJE / OSL</small></div>
+          <select class="flap" data-felt="status" aria-label="Status SAS">
+            <option value="UKJENT">UKJENT</option><option value="ÅPEN">ÅPEN</option>
+            <option value="MULIG">MULIG</option><option value="LUKKET">LUKKET</option>
+          </select>
+        </div>
+        <div class="bmeta">
+          <span>RADAR: <b data-auto="radar">ingen data</b></span>
+          <span>NYE TREFF: <b data-auto="nytt">0</b></span>
+          <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
+        </div>
+        <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: melding sendt til leder om retur, svar ventes …"></textarea>
+        <div class="bact">
+          <button class="btn smal gul" data-stemple>Stemple sjekket nå</button>
+          <a class="btn smal" href="https://careers.sasgroup.net/search/?q=&locationsearch=Gardermoen" target="_blank" rel="noopener">Åpne SAS karriere</a>
+        </div>
+      </div>
+
     </div>
 
     <div class="alerts" id="alerts"><div class="tom">INGEN RADARTREFF LASTET.</div></div>
@@ -294,7 +314,7 @@
     <h2>TRIAGE</h2>
     <div class="triage">
       <div class="togg">
-        <div class="tg" data-p="3"><div class="pt">+3</div><div class="lb">Selskap: Vy tog / Vygruppen eller ISS</div></div>
+        <div class="tg" data-p="3"><div class="pt">+3</div><div class="lb">Selskap: Vy tog / Vygruppen, ISS eller SAS GH</div></div>
         <div class="tg" data-p="3"><div class="pt">+3</div><div class="lb">Rolle: kundeveileder, stasjonsvert, kundevert eller assistanse, PRM, flyplassmedarbeider</div></div>
         <div class="tg" data-p="2"><div class="pt">+2</div><div class="lb">Sted: Oslo, Oslo S, Ski eller OSL, Gardermoen, Ullensaker</div></div>
         <div class="tg" data-p="2"><div class="pt">+2</div><div class="lb">Oppgaver: buss for tog, avvik, reiseinfo eller rullestol, ledsage, nedsatt funksjonsevne</div></div>
@@ -348,6 +368,8 @@
     <div class="btnrad">
       <a class="btn" href="https://www.vy.no/vygruppen/karriere-i-vy/ledige-stillinger" target="_blank" rel="noopener">Vy karriere</a>
       <a class="btn" href="https://iss.attract.reachmee.com/jobs" target="_blank" rel="noopener">ISS portal</a>
+      <a class="btn" href="https://careers.sasgroup.net/search/?q=&locationsearch=Gardermoen" target="_blank" rel="noopener">SAS karriere</a>
+      <a class="btn" href="https://www.finn.no/job/search?q=SAS%20Ground%20Handling" target="_blank" rel="noopener">Finn: SAS GH</a>
       <a class="btn" href="https://www.finn.no/job/search?q=kundeveileder" target="_blank" rel="noopener">Finn: kundeveileder</a>
       <a class="btn" href="https://www.finn.no/job/search?q=assistansetjenesten" target="_blank" rel="noopener">Finn: assistanse</a>
       <a class="btn" href="https://www.finn.no/job/search?q=flyplassmedarbeider" target="_blank" rel="noopener">Finn: flyplass</a>
@@ -363,6 +385,7 @@
     <div class="vind">
       <div class="vrow"><div class="vn">Høst 2026 supplering, Vy<small>mulig, ikke garantert. Radaren fanger den</small></div><div class="vd" data-frist="2026-09-01">–</div></div>
       <div class="vrow"><div class="vn">ISS vikarbatch<small>historisk utlyst rundt desember og januar</small></div><div class="vd" data-frist="2026-12-01">–</div></div>
+      <div class="vrow"><div class="vn">SAS GH sommerbatch, servicemedarbeider<small>sist utlyst 28. desember, frist slutten av januar og midten av februar</small></div><div class="vd" data-frist="2026-12-28">–</div></div>
       <div class="vrow"><div class="vn">Vy hovedbatch for sommer 2027<small>vinter og tidlig vår</small></div><div class="vd" data-frist="2027-02-01">–</div></div>
       <div class="vrow"><div class="vn">ISS tilkalling<small>dukker opp hele året, fortløpende vurdering, fart teller</small></div><div class="vd">LØPENDE</div></div>
     </div>
@@ -441,7 +464,7 @@ async function lastStatus(){
     if(min<=45){ rdot.className="dot live"; rtekst.textContent="RADAR: TILKOBLET · KJØRTE "+relTid(d.generated).toUpperCase(); }
     else{ rdot.className="dot stale"; rtekst.textContent="RADAR: GAMMEL DATA · "+relTid(d.generated).toUpperCase()+" · SJEKK ACTIONS"; }
     visKanaler(d.channels);
-    visMaalAuto(/vy/i,d); visMaalAuto(/iss/i,d);
+    visMaalAuto(/vy/i,d); visMaalAuto(/iss/i,d); visMaalAuto(/sas/i,d);
     const al=(d.recent_alerts||[]).slice(0,8);
     alertsEl.innerHTML = al.length
       ? al.map(a=>`<a class="alert" href="${trygLenke(a.link)}" target="_blank" rel="noopener"><span class="at">${esc((a.target||"").toUpperCase())} · ${relTid(a.time).toUpperCase()}</span>${esc(a.text)}</a>`).join("")

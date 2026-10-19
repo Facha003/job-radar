@@ -227,32 +227,58 @@ def check_webcruiter(target, seen_keys):
 
 
 def check_target(target, seen_keys):
-    """Fetch one career page, return list of (text, link, key) for new keyword hits."""
+    """Fetch one career page, return list of (text, link, key) for new keyword hits.
+
+    Optional per-target fields in config.json (all backwards compatible):
+      href_must_contain   link URL must contain one of these (location filter via URL)
+      exclude_keywords    skip hits whose title contains any of these
+      page_text_fallback  false = only alert on real job links, never on loose page text
+      sanity_href         if no link on the page contains this, count the run as a failure
+                          (catches a layout change instead of silently going quiet)
+    """
     name = target["name"]
     url = target["url"]
     keywords = [k.lower() for k in target["keywords"]]
+    exclude = [k.lower() for k in target.get("exclude_keywords", [])]
+    href_must = [s.lower() for s in target.get("href_must_contain", [])]
+    use_fallback = target.get("page_text_fallback", True)
+    sanity_href = target.get("sanity_href", "").lower()
 
     resp = fetch("GET", url, headers=HEADERS, timeout=30)
     soup = BeautifulSoup(resp.text, "html.parser")
+    anchors = soup.find_all("a", href=True)
+
+    if sanity_href and not any(sanity_href in a["href"].lower() for a in anchors):
+        raise requests.RequestException(
+            f"no links containing '{sanity_href}', page layout probably changed"
+        )
 
     hits = []
+    run_keys = set()
     any_link_matched = False
 
-    for a in soup.find_all("a", href=True):
+    for a in anchors:
         text = " ".join(a.get_text(" ", strip=True).split())
         if len(text) < 4:
             continue
+        link = urljoin(url, a["href"])
         low = text.lower()
-        if any(k in low for k in keywords):
-            any_link_matched = True
-            link = urljoin(url, a["href"])
-            key = f"{name}|{link}"
-            if key not in seen_keys:
-                hits.append((text, link, key))
+        if href_must and not any(s in link.lower() for s in href_must):
+            continue
+        if exclude and any(e in low for e in exclude):
+            continue
+        if not any(k in low for k in keywords):
+            continue
+        any_link_matched = True
+        key = f"{name}|{link}"
+        # run_keys: same job linked twice on one page (desktop + mobile) -> one alert
+        if key not in seen_keys and key not in run_keys:
+            run_keys.add(key)
+            hits.append((text, link, key))
 
     # Fallback: keyword appears in page text but not in any link
     # (covers pages that render listings without anchor titles).
-    if not any_link_matched:
+    if use_fallback and not any_link_matched:
         page_text = soup.get_text(" ", strip=True).lower()
         for k in keywords:
             if k in page_text:
