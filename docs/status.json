@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-21T06:28:37+00:00",
+  "generated": "2026-10-21T12:14:46+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -18,8 +18,8 @@
       "url": "https://iss.attract.reachmee.com/jobs",
       "ok": true,
       "consecutive_failures": 0,
-      "new_hits": 0,
-      "total_seen": 2
+      "new_hits": 1,
+      "total_seen": 3
     },
     {
       "name": "SAS Ground Handling",
@@ -30,5 +30,12 @@
       "total_seen": 0
     }
   ],
-  "recent_alerts": []
+  "recent_alerts": [
+    {
+      "time": "2026-10-21T12:14:45+00:00",
+      "target": "ISS portal",
+      "text": "Har du lyst på en aktiv arbeidshverdag på Harstad/Narvik (Evenes) lufthavn?",
+      "link": "https://iss.attract.reachmee.com/jobs/3771-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-har"
+    }
+  ]
 }
