@@ -3,6 +3,7 @@
     "ISS portal|https://iss.attract.reachmee.com/jobs/3690-bli-en-del-av-det-nye-servicesenteret-pa-oslo",
     "ISS portal|https://iss.attract.reachmee.com/jobs/3743-utforsk-en-meningsfull-karriere-ved-oslo-luft",
     "ISS portal|https://iss.attract.reachmee.com/jobs/3771-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-har",
+    "ISS portal|https://iss.attract.reachmee.com/jobs/3775-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-san",
     "Vy karriere|webcruiter|5164307165"
   ],
   "fail": {
@@ -11,6 +12,12 @@
     "SAS Ground Handling": 0
   },
   "alerts": [
+    {
+      "time": "2026-10-22T14:37:04+00:00",
+      "target": "ISS portal",
+      "text": "Har du lyst på en aktiv arbeidshverdag på Sandane Lufthavn?",
+      "link": "https://iss.attract.reachmee.com/jobs/3775-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-san"
+    },
     {
       "time": "2026-10-21T12:14:45+00:00",
       "target": "ISS portal",

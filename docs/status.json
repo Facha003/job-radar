@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-22T09:34:06+00:00",
+  "generated": "2026-10-22T14:37:05+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -18,8 +18,8 @@
       "url": "https://iss.attract.reachmee.com/jobs",
       "ok": true,
       "consecutive_failures": 0,
-      "new_hits": 0,
-      "total_seen": 3
+      "new_hits": 1,
+      "total_seen": 4
     },
     {
       "name": "SAS Ground Handling",
@@ -31,6 +31,12 @@
     }
   ],
   "recent_alerts": [
+    {
+      "time": "2026-10-22T14:37:04+00:00",
+      "target": "ISS portal",
+      "text": "Har du lyst på en aktiv arbeidshverdag på Sandane Lufthavn?",
+      "link": "https://iss.attract.reachmee.com/jobs/3775-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-san"
+    },
     {
       "time": "2026-10-21T12:14:45+00:00",
       "target": "ISS portal",
