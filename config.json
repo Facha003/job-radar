@@ -121,7 +121,22 @@
       ],
       "page_text_fallback": false,
       "sanity_href": "/job/",
-      "context_parent": true
+      "context_parent": true,
+      "check_detail": true,
+      "detail_trigger": [
+        "sommer",
+        "vikar",
+        "sesong",
+        "season",
+        "deltid",
+        "part time",
+        "part-time",
+        "ekstrahjelp",
+        "student",
+        "flyplass",
+        "lufthavn",
+        "airport"
+      ]
     },
     {
       "name": "Norwegian (Red Handling)",
@@ -146,7 +161,10 @@
         "transfer desk",
         "service desk",
         "servicesenter",
-        "kundesenter"
+        "kundesenter",
+        "customer service",
+        "kundeservice",
+        "ticket"
       ],
       "exclude_keywords": [
         "ramp",
@@ -185,7 +203,22 @@
       ],
       "page_text_fallback": false,
       "sanity_href": "/job/",
-      "context_parent": true
+      "context_parent": true,
+      "check_detail": true,
+      "detail_trigger": [
+        "sommer",
+        "vikar",
+        "sesong",
+        "season",
+        "deltid",
+        "part time",
+        "part-time",
+        "ekstrahjelp",
+        "student",
+        "flyplass",
+        "lufthavn",
+        "airport"
+      ]
     },
     {
       "name": "Widerøe Ground Handling",
@@ -235,7 +268,10 @@
         "manager",
         "leder",
         "supervisor",
-        "fraktkonsulent"
+        "fraktkonsulent",
+        "planlegger",
+        "bemanning",
+        "økonomi"
       ],
       "location_must_contain": [
         "gardermoen",
@@ -245,7 +281,19 @@
       ],
       "context_parent": true,
       "page_text_fallback": false,
-      "sanity_href": "jobbnorge.no"
+      "sanity_href": "jobbnorge.no",
+      "check_detail": true,
+      "detail_trigger": [
+        "sommer",
+        "vikar",
+        "sesong",
+        "season",
+        "deltid",
+        "part time",
+        "part-time",
+        "ekstrahjelp",
+        "student"
+      ]
     }
   ]
 }

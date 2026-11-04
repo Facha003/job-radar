@@ -268,6 +268,8 @@ def check_target(target, seen_keys):
       location_must_contain  title or link must contain one of these (e.g. Gardermoen only)
       context_parent      match on the whole listing row (title + location + category),
                           not just the link text
+      detail_trigger      only open the ad when the row has one of these words
+                          (e.g. "sommer", "vikar"), so engineer/pilot ads aren't opened
       check_detail        if the title doesn't name the role, open the ad and require a
                           keyword in its body; unreadable ads still alert, flagged
     """
@@ -281,6 +283,7 @@ def check_target(target, seen_keys):
     location_must = [s.lower() for s in target.get("location_must_contain", [])]
     check_detail = target.get("check_detail", False)
     use_context = target.get("context_parent", False)
+    detail_trigger = [k.lower() for k in target.get("detail_trigger", [])]
 
     resp = fetch("GET", url, headers=HEADERS, timeout=30)
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -324,7 +327,7 @@ def check_target(target, seen_keys):
             continue
         if any(k in low for k in keywords):
             pass  # role named in the title itself
-        elif check_detail:
+        elif check_detail and (not detail_trigger or any(k in low for k in detail_trigger)):
             # ISS titles are vague ("Har du lyst på en aktiv arbeidshverdag ..."),
             # so the role is only stated inside the ad. Open it and look there.
             body = fetch_detail_text(link)
