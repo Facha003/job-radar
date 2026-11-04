@@ -18,6 +18,7 @@ Do NOT point this at finn.no (their terms prohibit scraping; use their alerts).
 
 import json
 import os
+import re
 import smtplib
 import sys
 import time
@@ -212,7 +213,9 @@ def check_webcruiter(target, seen_keys):
     )
 
     hits = []
-    for ad in resp.json().get("Data", []):
+    ads = resp.json().get("Data", [])
+    LISTING_COUNTS[name] = len(ads)
+    for ad in ads:
         heading = (ad.get("Heading") or "").strip()
         haystack = f"{heading} {ad.get('JobCategory') or ''}".lower()
         if not any(k in haystack for k in keywords):
@@ -224,6 +227,22 @@ def check_webcruiter(target, seen_keys):
             parts = [heading, f"({place})" if place else "", "·", webcruiter_deadline(ad)]
             hits.append((" ".join(p for p in parts if p), link, key))
     return hits
+
+
+LISTING_COUNTS = {}  # target name -> live listings seen this run (for the weekly alive mail)
+
+DEADLINE_RES = [
+    re.compile(r"s\u00f8knadsfrist:?\s*([^|]*?\d{4})", re.I),   # Jobbnorge: "Søknadsfrist: Fredag 6. november 2026"
+    re.compile(r"\b(\d{2}\.\d{2}\.\d{4})\b"),                    # ReachMee row: "... Gardermoen 18.11.2026"
+]
+
+
+def find_deadline(row_text):
+    for rx in DEADLINE_RES:
+        m = rx.search(row_text)
+        if m:
+            return m.group(1).strip()
+    return ""
 
 
 def fetch_detail_text(link):
@@ -275,18 +294,23 @@ def check_target(target, seen_keys):
     hits = []
     run_keys = set()
     any_link_matched = False
+    listing_links = set()
 
     for a in anchors:
         text = " ".join(a.get_text(" ", strip=True).split())
         if len(text) < 4:
             continue
         link = urljoin(url, a["href"])
+        if sanity_href and sanity_href in a["href"].lower():
+            listing_links.add(link)
         low = text.lower()
+        raw_row = text
         if use_context:
             # Job boards print location, role category and deadline in the same
             # row as the link (ISS: "Renholdsmedarbeider Stjørdal"). Match on that.
             row = a.find_parent(["li", "article", "tr"]) or a.parent
-            low = " ".join(row.get_text(" ", strip=True).split()).lower() or low
+            raw_row = " ".join(row.get_text(" ", strip=True).split()) or text
+            low = raw_row.lower()
         if href_must and not any(s in link.lower() for s in href_must):
             continue
         if location_must and not any(s in low or s in link.lower() for s in location_must):
@@ -313,7 +337,10 @@ def check_target(target, seen_keys):
         any_link_matched = True
         # run_keys: same job linked twice on one page (desktop + mobile) -> one alert
         run_keys.add(key)
-        hits.append((text, link, key))
+        deadline = find_deadline(raw_row)
+        hits.append((f"{text} · frist {deadline}" if deadline else text, link, key))
+
+    LISTING_COUNTS[name] = len(listing_links)
 
     # Fallback: keyword appears in page text but not in any link
     # (covers pages that render listings without anchor titles).
@@ -328,6 +355,46 @@ def check_target(target, seen_keys):
                     )
 
     return hits
+
+
+def weekly_heartbeat(cfg, run_report, sent_week, last_counts, force=False):
+    """Once a week (first run on Monday, Oslo morning) send a 'radar is alive'
+    summary with live listing counts per company. A count that drops to 0 or
+    halves since last week is flagged: that is what a quietly broken parser
+    looks like. Returns the updated (sent_week, last_counts)."""
+    now = datetime.now(timezone.utc)
+    iso = now.isocalendar()
+    week = f"{iso[0]}-W{iso[1]:02d}"
+    if not force and (now.weekday() != 0 or now.hour < 6 or sent_week == week):
+        return sent_week, last_counts
+
+    lines, warnings, counts = [], [], {}
+    for t in run_report:
+        n = t.get("listings")
+        prev = last_counts.get(t["name"])
+        counts[t["name"]] = n
+        if not t["ok"]:
+            state_txt = f"FEIL ({t['consecutive_failures']} på rad)"
+            warnings.append(f"{t['name']}: klarer ikke lese siden")
+        else:
+            state_txt = f"{n} annonser" if n is not None else "OK"
+            if n == 0:
+                warnings.append(f"{t['name']}: 0 annonser. Åpne siden selv og sjekk")
+            elif prev and n is not None and n < prev / 2:
+                warnings.append(f"{t['name']}: falt fra {prev} til {n} annonser siden forrige uke")
+        trend = f" (forrige uke {prev})" if prev is not None and prev != n else ""
+        lines.append(f"- {t['name']}: {state_txt}{trend}")
+
+    status = "SJEKK DETTE" if warnings else "alt ser normalt ut"
+    title = f"Radar lever · uke {iso[1]} · {status}"
+    body = "\n".join(lines)
+    if warnings:
+        body += "\n\n⚠️ " + "\n⚠️ ".join(warnings)
+    body += "\n\nIngen handling trengs hvis alt ser normalt ut."
+    notify(cfg, title, body, "https://facha003.github.io/job-radar/")
+    save_json(BASE / "heartbeat.json", {"title": title, "body": body})
+    print(f"Heartbeat sent: {title}")
+    return week, counts
 
 
 def main():
@@ -446,17 +513,23 @@ def main():
             "consecutive_failures": 0,
             "new_hits": len(hits),
             "total_seen": sum(1 for k in seen_keys if k.startswith(name + "|")),
+            "listings": LISTING_COUNTS.get(name),
         })
         print(f"[{name}] checked OK, {len(hits)} new hit(s)")
 
     alerts = alerts[:MAX_ALERT_HISTORY]
+    heartbeat_week = state.get("heartbeat_week", "")
+    last_counts = state.get("last_counts", {})
+    heartbeat_week, last_counts = weekly_heartbeat(cfg, run_report, heartbeat_week, last_counts,
+                                                     force="--heartbeat" in sys.argv)
     smtp = smtp_conf(cfg)
     channels = {
         # in Actions the issue->email path is always on, even without secrets
         "email": bool(smtp["user"] and smtp["password"]) or os.environ.get("GITHUB_ACTIONS") == "true",
         "push": bool(get_topic(cfg)),
     }
-    save_json(STATE_PATH, {"seen": sorted(seen_keys), "fail": fail_counts, "alerts": alerts})
+    save_json(STATE_PATH, {"seen": sorted(seen_keys), "fail": fail_counts, "alerts": alerts,
+                           "heartbeat_week": heartbeat_week, "last_counts": last_counts})
     save_json(BASE / "run_alerts.json", run_alerts)
     save_json(STATUS_PATH, {
         "generated": now_iso(),

@@ -250,6 +250,7 @@
         <div class="bmeta">
           <span>RADAR: <b data-auto="radar">ingen data</b></span>
           <span>NYE TREFF: <b data-auto="nytt">0</b></span>
+          <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
           <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
         </div>
         <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: Vy tog filteret sjekket, den ene utlysningen var …"></textarea>
@@ -270,6 +271,7 @@
         <div class="bmeta">
           <span>RADAR: <b data-auto="radar">ingen data</b></span>
           <span>NYE TREFF: <b data-auto="nytt">0</b></span>
+          <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
           <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
         </div>
         <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: ny portal funnet via Finn annonse, åpen søknad sendt …"></textarea>
@@ -290,6 +292,7 @@
         <div class="bmeta">
           <span>RADAR: <b data-auto="radar">ingen data</b></span>
           <span>NYE TREFF: <b data-auto="nytt">0</b></span>
+          <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
           <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
         </div>
         <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: melding sendt til leder om retur, svar ventes …"></textarea>
@@ -310,6 +313,7 @@
         <div class="bmeta">
           <span>RADAR: <b data-auto="radar">ingen data</b></span>
           <span>NYE TREFF: <b data-auto="nytt">0</b></span>
+          <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
           <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
         </div>
         <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: CSA stilling utlyst, søkt …"></textarea>
@@ -330,6 +334,7 @@
         <div class="bmeta">
           <span>RADAR: <b data-auto="radar">ingen data</b></span>
           <span>NYE TREFF: <b data-auto="nytt">0</b></span>
+          <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
           <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
         </div>
         <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: flyekspeditør OSL utlyst på Jobbnorge …"></textarea>
@@ -420,6 +425,8 @@ function visMaalAuto(navnRegex,data){
   if(t.ok){ rEl.textContent="OK"; rEl.classList.remove("warn"); }
   else{ rEl.textContent="FEIL x"+(t.consecutive_failures||1); rEl.classList.add("warn"); }
   nEl.textContent=t.new_hits||0;
+  const aEl=rad.querySelector('[data-auto="ann"]');
+  if(aEl) aEl.textContent=(t.listings??"–");
   if((t.new_hits||0)>0) nEl.classList.add("nytt");
 }
 
