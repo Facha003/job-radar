@@ -75,10 +75,7 @@
         "leder",
         "supervisor",
         "renhold",
-        "cleaner",
-        "rampe",
-        "ramp",
-        "lager"
+        "cleaner"
       ],
       "href_must_contain": [
         "/job/gardermoen",
@@ -87,6 +84,77 @@
       ],
       "page_text_fallback": false,
       "sanity_href": "/job/"
+    },
+    {
+      "name": "Norwegian (Red Handling)",
+      "url": "https://careers.norwegian.com/search/?q=&locationsearch=Gardermoen",
+      "keywords": [
+        "ground handling",
+        "red handling",
+        "passenger service",
+        "customer service agent",
+        "csa",
+        "check-in",
+        "ramp",
+        "baggage",
+        "bagasje",
+        "gate",
+        "servicemedarbeider",
+        "bakke"
+      ],
+      "exclude_keywords": [
+        "manager",
+        "leder",
+        "supervisor",
+        "team leader",
+        "evaluator",
+        "instructor",
+        "training officer",
+        "pilot",
+        "cabin",
+        "kabin",
+        "renhold",
+        "cleaner"
+      ],
+      "location_must_contain": [
+        "gardermoen",
+        "osl"
+      ],
+      "page_text_fallback": false,
+      "sanity_href": "/job/"
+    },
+    {
+      "name": "Widerøe Ground Handling",
+      "url": "https://jobbiwideroe.no/karriere-i-wideroe/bakkepersonell/",
+      "keywords": [
+        "flyekspeditør",
+        "flyekspeditoer",
+        "ground handling",
+        "rampe",
+        "ramp",
+        "passasjer",
+        "check-in",
+        "innsjekk",
+        "servicemedarbeider",
+        "bagasje",
+        "handling agent"
+      ],
+      "exclude_keywords": [
+        "leder",
+        "manager",
+        "supervisor",
+        "renhold",
+        "fraktkonsulent"
+      ],
+      "location_must_contain": [
+        "gardermoen",
+        "oslo lufthavn",
+        "oslo-lufthavn",
+        "oslo"
+      ],
+      "context_parent": true,
+      "page_text_fallback": false,
+      "sanity_href": "jobbnorge.no"
     }
   ]
 }

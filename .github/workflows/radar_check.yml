@@ -23,6 +23,14 @@ on:
         description: "Send a test alert through the real email path (no scraping)"
         type: boolean
         default: false
+      dry_run:
+        description: "Scrape and print what would alert, send nothing, save nothing"
+        type: boolean
+        default: false
+      dry_run_target:
+        description: "Dry run only targets whose name contains this (blank = all)"
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -54,7 +62,8 @@ jobs:
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
-        run: python job_radar.py ${{ inputs.test_alert && '--test' || '' }}
+          DRY_RUN_TARGET: ${{ inputs.dry_run_target }}
+        run: python job_radar.py ${{ inputs.test_alert && '--test' || '' }} ${{ inputs.dry_run && '--dry-run' || '' }}
 
       # Email with zero secrets: open one issue per run with new hits.
       # GitHub notifies the repo owner about new issues by email.

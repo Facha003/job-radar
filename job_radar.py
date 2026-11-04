@@ -348,6 +348,34 @@ def main():
         ])
         return
 
+    if "--dry-run" in sys.argv:
+        # Scrape every target, print what WOULD alert (ignoring seen.json),
+        # plus raw job links, so a new target can be checked from GitHub's
+        # servers. Sends nothing and writes no state.
+        save_json(BASE / "run_alerts.json", [])
+        only = os.environ.get("DRY_RUN_TARGET", "").lower()
+        for target in cfg.get("targets", []):
+            if only and only not in target["name"].lower():
+                continue
+            print(f"\n===== {target['name']} =====")
+            try:
+                if target.get("type") != "webcruiter":
+                    resp = fetch("GET", target["url"], headers=HEADERS, timeout=30)
+                    soup = BeautifulSoup(resp.text, "html.parser")
+                    print(f"HTTP {resp.status_code}, {len(resp.text)} bytes, title: {soup.title.string if soup.title else '-'}")
+                    for a in soup.find_all("a", href=True)[:150]:
+                        t = " ".join(a.get_text(" ", strip=True).split())
+                        par = a.find_parent(["li", "article", "tr"]) or a.parent
+                        ctx = " ".join(par.get_text(" ", strip=True).split())[:160]
+                        print(f"  LINK {a['href'][:110]} | {t[:80]} | ctx: {ctx}")
+                hits = (check_webcruiter if target.get("type") == "webcruiter" else check_target)(target, set())
+                for text, link, _ in hits:
+                    print(f"  WOULD ALERT: {text} -> {link}")
+                print(f"  {len(hits)} would-alert hit(s)")
+            except Exception as exc:
+                print(f"  ERROR: {exc}")
+        return
+
     run_report = []
     run_alerts = []  # only this run's hits; the workflow turns them into a GitHub issue
 
