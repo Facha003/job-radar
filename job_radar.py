@@ -456,7 +456,7 @@ def main():
                 hits = (check_webcruiter if target.get("type") == "webcruiter" else check_target)(target, set())
                 for text, link, _ in hits:
                     print(f"  WOULD ALERT: {text} -> {link}")
-                print(f"  {len(hits)} would-alert hit(s)")
+                print(f"  {len(hits)} would-alert hit(s), listings counted: {LISTING_COUNTS.get(target['name'])}")
             except Exception as exc:
                 print(f"  ERROR: {exc}")
         return
