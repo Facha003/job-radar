@@ -226,6 +226,17 @@ def check_webcruiter(target, seen_keys):
     return hits
 
 
+def fetch_detail_text(link):
+    """Lowercased text of one job ad, or None if it can't be read
+    (network error, or a JS-only page with almost no text)."""
+    try:
+        resp = fetch("GET", link, headers=HEADERS, timeout=30)
+    except requests.RequestException:
+        return None
+    text = BeautifulSoup(resp.text, "html.parser").get_text(" ", strip=True).lower()
+    return text if len(text) > 300 else None
+
+
 def check_target(target, seen_keys):
     """Fetch one career page, return list of (text, link, key) for new keyword hits.
 
@@ -235,6 +246,9 @@ def check_target(target, seen_keys):
       page_text_fallback  false = only alert on real job links, never on loose page text
       sanity_href         if no link on the page contains this, count the run as a failure
                           (catches a layout change instead of silently going quiet)
+      location_must_contain  title or link must contain one of these (e.g. Gardermoen only)
+      check_detail        if the title doesn't name the role, open the ad and require a
+                          keyword in its body; unreadable ads still alert, flagged
     """
     name = target["name"]
     url = target["url"]
@@ -243,6 +257,8 @@ def check_target(target, seen_keys):
     href_must = [s.lower() for s in target.get("href_must_contain", [])]
     use_fallback = target.get("page_text_fallback", True)
     sanity_href = target.get("sanity_href", "").lower()
+    location_must = [s.lower() for s in target.get("location_must_contain", [])]
+    check_detail = target.get("check_detail", False)
 
     resp = fetch("GET", url, headers=HEADERS, timeout=30)
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -265,16 +281,31 @@ def check_target(target, seen_keys):
         low = text.lower()
         if href_must and not any(s in link.lower() for s in href_must):
             continue
+        if location_must and not any(s in low or s in link.lower() for s in location_must):
+            continue
         if exclude and any(e in low for e in exclude):
             continue
-        if not any(k in low for k in keywords):
+        key = f"{name}|{link}"
+        if key in seen_keys or key in run_keys:
+            if any(k in low for k in keywords):
+                any_link_matched = True
+            continue
+        if any(k in low for k in keywords):
+            pass  # role named in the title itself
+        elif check_detail:
+            # ISS titles are vague ("Har du lyst på en aktiv arbeidshverdag ..."),
+            # so the role is only stated inside the ad. Open it and look there.
+            body = fetch_detail_text(link)
+            if body is None:
+                text += "  [kunne ikke lese annonsen, sjekk rollen selv]"
+            elif not any(k in body for k in keywords):
+                continue
+        else:
             continue
         any_link_matched = True
-        key = f"{name}|{link}"
         # run_keys: same job linked twice on one page (desktop + mobile) -> one alert
-        if key not in seen_keys and key not in run_keys:
-            run_keys.add(key)
-            hits.append((text, link, key))
+        run_keys.add(key)
+        hits.append((text, link, key))
 
     # Fallback: keyword appears in page text but not in any link
     # (covers pages that render listings without anchor titles).

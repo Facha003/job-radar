@@ -28,13 +28,35 @@
       "url": "https://iss.attract.reachmee.com/jobs",
       "keywords": [
         "assistanse",
+        "assistansetjenest",
         "prm",
-        "flyplass",
-        "lufthavn",
+        "ledsag",
+        "bevegelseshemm",
+        "redusert mobilitet",
+        "rullestol"
+      ],
+      "location_must_contain": [
         "gardermoen",
-        "ledsager",
-        "aviation"
-      ]
+        "oslo lufthavn",
+        "oslo luft",
+        "oslo-luft",
+        "ullensaker"
+      ],
+      "exclude_keywords": [
+        "renhold",
+        "renholder",
+        "rengjøring",
+        "cleaner",
+        "cleaning",
+        "kantine",
+        "kokk",
+        "vaskeri",
+        "leder",
+        "manager"
+      ],
+      "check_detail": true,
+      "page_text_fallback": false,
+      "sanity_href": "/jobs/"
     },
     {
       "name": "SAS Ground Handling",
@@ -48,8 +70,21 @@
         "service agent",
         "landside"
       ],
-      "exclude_keywords": ["manager", "leder", "supervisor"],
-      "href_must_contain": ["/job/gardermoen", "/job/oslo", "/job/ullensaker"],
+      "exclude_keywords": [
+        "manager",
+        "leder",
+        "supervisor",
+        "renhold",
+        "cleaner",
+        "rampe",
+        "ramp",
+        "lager"
+      ],
+      "href_must_contain": [
+        "/job/gardermoen",
+        "/job/oslo",
+        "/job/ullensaker"
+      ],
       "page_text_fallback": false,
       "sanity_href": "/job/"
     }
