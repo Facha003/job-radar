@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-04T17:23:45+00:00",
+  "generated": "2026-11-04T18:53:42+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -12,7 +12,8 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 1,
-      "listings": 22
+      "listings": 22,
+      "open": []
     },
     {
       "name": "ISS portal",
@@ -21,7 +22,8 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 5,
-      "listings": 12
+      "listings": 12,
+      "open": []
     },
     {
       "name": "SAS Ground Handling",
@@ -30,7 +32,8 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 0,
-      "listings": 1
+      "listings": 1,
+      "open": []
     },
     {
       "name": "Norwegian (Red Handling)",
@@ -39,7 +42,8 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 0,
-      "listings": 1
+      "listings": 1,
+      "open": []
     },
     {
       "name": "Widerøe Ground Handling",
@@ -48,7 +52,8 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 0,
-      "listings": 4
+      "listings": 4,
+      "open": []
     }
   ],
   "recent_alerts": []
