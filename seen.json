@@ -1,37 +1,18 @@
 {
-  "seen": [
-    "ISS portal|https://iss.attract.reachmee.com/jobs/3690-bli-en-del-av-det-nye-servicesenteret-pa-oslo",
-    "ISS portal|https://iss.attract.reachmee.com/jobs/3743-utforsk-en-meningsfull-karriere-ved-oslo-luft",
-    "ISS portal|https://iss.attract.reachmee.com/jobs/3771-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-har",
-    "ISS portal|https://iss.attract.reachmee.com/jobs/3775-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-san",
-    "ISS portal|https://iss.attract.reachmee.com/jobs/3782-liker-du-a-vaere-i-aktivitet-pa-jobb-vi-soker",
-    "Vy karriere|webcruiter|5164307165"
-  ],
-  "fail": {
-    "Vy karriere": 0,
-    "ISS portal": 0,
-    "SAS Ground Handling": 0,
-    "Norwegian (Red Handling)": 0,
-    "Widerøe Ground Handling": 0
-  },
-  "alerts": [
-    {
-      "time": "2026-11-04T15:18:43+00:00",
-      "target": "ISS portal",
-      "text": "Liker du å være i aktivitet på jobb? Vi søker servicehelt til vikariat på Værnes lufthavn!",
-      "link": "https://iss.attract.reachmee.com/jobs/3782-liker-du-a-vaere-i-aktivitet-pa-jobb-vi-soker"
-    },
-    {
-      "time": "2026-10-22T14:37:04+00:00",
-      "target": "ISS portal",
-      "text": "Har du lyst på en aktiv arbeidshverdag på Sandane Lufthavn?",
-      "link": "https://iss.attract.reachmee.com/jobs/3775-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-san"
-    },
-    {
-      "time": "2026-10-21T12:14:45+00:00",
-      "target": "ISS portal",
-      "text": "Har du lyst på en aktiv arbeidshverdag på Harstad/Narvik (Evenes) lufthavn?",
-      "link": "https://iss.attract.reachmee.com/jobs/3771-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-har"
-    }
-  ]
+ "seen": [
+  "ISS portal|https://iss.attract.reachmee.com/jobs/3690-bli-en-del-av-det-nye-servicesenteret-pa-oslo",
+  "ISS portal|https://iss.attract.reachmee.com/jobs/3743-utforsk-en-meningsfull-karriere-ved-oslo-luft",
+  "ISS portal|https://iss.attract.reachmee.com/jobs/3771-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-har",
+  "ISS portal|https://iss.attract.reachmee.com/jobs/3775-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-san",
+  "ISS portal|https://iss.attract.reachmee.com/jobs/3782-liker-du-a-vaere-i-aktivitet-pa-jobb-vi-soker",
+  "Vy karriere|webcruiter|5164307165"
+ ],
+ "fail": {
+  "Vy karriere": 0,
+  "ISS portal": 0,
+  "SAS Ground Handling": 0,
+  "Norwegian (Red Handling)": 0,
+  "Widerøe Ground Handling": 0
+ },
+ "alerts": []
 }
