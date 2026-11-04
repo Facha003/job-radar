@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-04T16:55:49+00:00",
+  "generated": "2026-11-04T17:01:34+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -24,6 +24,22 @@
     {
       "name": "SAS Ground Handling",
       "url": "https://careers.sasgroup.net/search/?q=&locationsearch=Gardermoen",
+      "ok": true,
+      "consecutive_failures": 0,
+      "new_hits": 0,
+      "total_seen": 0
+    },
+    {
+      "name": "Norwegian (Red Handling)",
+      "url": "https://careers.norwegian.com/search/?q=&locationsearch=Gardermoen",
+      "ok": true,
+      "consecutive_failures": 0,
+      "new_hits": 0,
+      "total_seen": 0
+    },
+    {
+      "name": "Widerøe Ground Handling",
+      "url": "https://jobbiwideroe.no/karriere-i-wideroe/bakkepersonell/",
       "ok": true,
       "consecutive_failures": 0,
       "new_hits": 0,
