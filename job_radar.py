@@ -367,7 +367,14 @@ def main():
                 continue
             print(f"\n===== {target['name']} =====")
             try:
-                if target.get("type") != "webcruiter":
+                if target.get("type") == "webcruiter":
+                    resp = fetch("POST", f"https://candidate.webcruiter.com/api/odvert/companysearch/{target['silo']}",
+                                 headers={**HEADERS, "Accept": "application/json"}, json={"skip": 0, "take": 200}, timeout=30)
+                    ads = resp.json().get("Data", [])
+                    print(f"HTTP {resp.status_code}, {len(ads)} adverts")
+                    for ad in ads:
+                        print(f"  AD {ad.get('Heading')} | {ad.get('JobCategory')} | {ad.get('Workplace')} | {webcruiter_deadline(ad)}")
+                else:
                     resp = fetch("GET", target["url"], headers=HEADERS, timeout=30)
                     soup = BeautifulSoup(resp.text, "html.parser")
                     print(f"HTTP {resp.status_code}, {len(resp.text)} bytes, title: {soup.title.string if soup.title else '-'}")
