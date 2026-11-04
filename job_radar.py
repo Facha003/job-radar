@@ -247,6 +247,8 @@ def check_target(target, seen_keys):
       sanity_href         if no link on the page contains this, count the run as a failure
                           (catches a layout change instead of silently going quiet)
       location_must_contain  title or link must contain one of these (e.g. Gardermoen only)
+      context_parent      match on the whole listing row (title + location + category),
+                          not just the link text
       check_detail        if the title doesn't name the role, open the ad and require a
                           keyword in its body; unreadable ads still alert, flagged
     """
@@ -259,6 +261,7 @@ def check_target(target, seen_keys):
     sanity_href = target.get("sanity_href", "").lower()
     location_must = [s.lower() for s in target.get("location_must_contain", [])]
     check_detail = target.get("check_detail", False)
+    use_context = target.get("context_parent", False)
 
     resp = fetch("GET", url, headers=HEADERS, timeout=30)
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -279,6 +282,11 @@ def check_target(target, seen_keys):
             continue
         link = urljoin(url, a["href"])
         low = text.lower()
+        if use_context:
+            # Job boards print location, role category and deadline in the same
+            # row as the link (ISS: "Renholdsmedarbeider Stjørdal"). Match on that.
+            row = a.find_parent(["li", "article", "tr"]) or a.parent
+            low = " ".join(row.get_text(" ", strip=True).split()).lower() or low
         if href_must and not any(s in link.lower() for s in href_must):
             continue
         if location_must and not any(s in low or s in link.lower() for s in location_must):

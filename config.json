@@ -44,19 +44,23 @@
       ],
       "exclude_keywords": [
         "renhold",
-        "renholder",
         "rengjøring",
         "cleaner",
         "cleaning",
         "kantine",
         "kokk",
+        "kjøkken",
+        "barista",
         "vaskeri",
+        "sjef",
         "leder",
-        "manager"
+        "manager",
+        "driftstekniker"
       ],
       "check_detail": true,
       "page_text_fallback": false,
-      "sanity_href": "/jobs/"
+      "sanity_href": "/jobs/",
+      "context_parent": true
     },
     {
       "name": "SAS Ground Handling",
@@ -68,7 +72,14 @@
         "innsjekk",
         "kundeservice",
         "service agent",
-        "landside"
+        "landside",
+        "ramp",
+        "rampe",
+        "bagasje",
+        "baggage",
+        "ground handling",
+        "handling agent",
+        "lastemedarbeider"
       ],
       "exclude_keywords": [
         "manager",
@@ -83,7 +94,8 @@
         "/job/ullensaker"
       ],
       "page_text_fallback": false,
-      "sanity_href": "/job/"
+      "sanity_href": "/job/",
+      "context_parent": true
     },
     {
       "name": "Norwegian (Red Handling)",
@@ -121,7 +133,8 @@
         "osl"
       ],
       "page_text_fallback": false,
-      "sanity_href": "/job/"
+      "sanity_href": "/job/",
+      "context_parent": true
     },
     {
       "name": "Widerøe Ground Handling",
