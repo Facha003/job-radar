@@ -213,6 +213,7 @@ def check_webcruiter(target, seen_keys):
     )
 
     hits = []
+    OPEN_MATCHES[name] = []
     ads = resp.json().get("Data", [])
     LISTING_COUNTS[name] = len(ads)
     for ad in ads:
@@ -222,14 +223,17 @@ def check_webcruiter(target, seen_keys):
             continue
         link = ad.get("OpenAdvertUrl") or target["url"]
         key = f"{name}|webcruiter|{ad.get('Id') or link}"
+        place = (ad.get("Workplace") or "").strip()
+        parts = [heading, f"({place})" if place else "", "·", webcruiter_deadline(ad)]
+        label = " ".join(p for p in parts if p)
+        OPEN_MATCHES.setdefault(name, []).append({"text": label, "link": link})
         if key not in seen_keys:
-            place = (ad.get("Workplace") or "").strip()
-            parts = [heading, f"({place})" if place else "", "·", webcruiter_deadline(ad)]
-            hits.append((" ".join(p for p in parts if p), link, key))
+            hits.append((label, link, key))
     return hits
 
 
 LISTING_COUNTS = {}  # target name -> live listings seen this run (for the weekly alive mail)
+OPEN_MATCHES = {}    # target name -> wanted postings live right now (lights the dashboard card)
 
 DEADLINE_RES = [
     re.compile(r"s\u00f8knadsfrist:?\s*([^|]*?\d{4})", re.I),   # Jobbnorge: "Søknadsfrist: Fredag 6. november 2026"
@@ -298,6 +302,7 @@ def check_target(target, seen_keys):
     run_keys = set()
     any_link_matched = False
     listing_links = set()
+    OPEN_MATCHES[name] = []
 
     for a in anchors:
         text = " ".join(a.get_text(" ", strip=True).split())
@@ -321,10 +326,8 @@ def check_target(target, seen_keys):
         if exclude and any(e in low for e in exclude):
             continue
         key = f"{name}|{link}"
-        if key in seen_keys or key in run_keys:
-            if any(k in low for k in keywords):
-                any_link_matched = True
-            continue
+        if key in run_keys:
+            continue  # same job linked twice on one page (desktop + mobile, "Se stillingen")
         if any(k in low for k in keywords):
             pass  # role named in the title itself
         elif check_detail and (not detail_trigger or any(k in low for k in detail_trigger)):
@@ -338,10 +341,12 @@ def check_target(target, seen_keys):
         else:
             continue
         any_link_matched = True
-        # run_keys: same job linked twice on one page (desktop + mobile) -> one alert
         run_keys.add(key)
         deadline = find_deadline(raw_row)
-        hits.append((f"{text} · frist {deadline}" if deadline else text, link, key))
+        label = f"{text} · frist {deadline}" if deadline else text
+        OPEN_MATCHES[name].append({"text": label, "link": link})
+        if key not in seen_keys:
+            hits.append((label, link, key))
 
     LISTING_COUNTS[name] = len(listing_links)
 
@@ -463,6 +468,7 @@ def main():
                 print(f"  ERROR: {exc}")
         return
 
+    prev_open = {t["name"]: t.get("open", []) for t in load_json(STATUS_PATH, {}).get("targets", [])}
     run_report = []
     run_alerts = []  # only this run's hits; the workflow turns them into a GitHub issue
 
@@ -490,6 +496,7 @@ def main():
                 "consecutive_failures": fail_counts[name],
                 "new_hits": 0,
                 "total_seen": sum(1 for k in seen_keys if k.startswith(name + "|")),
+                "open": prev_open.get(name, []),
             })
             continue
 
@@ -519,6 +526,7 @@ def main():
             "new_hits": len(hits),
             "total_seen": sum(1 for k in seen_keys if k.startswith(name + "|")),
             "listings": LISTING_COUNTS.get(name),
+            "open": OPEN_MATCHES.get(name, []),
         })
         print(f"[{name}] checked OK, {len(hits)} new hit(s)")
 

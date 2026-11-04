@@ -84,6 +84,16 @@
   }
   .brow{border-bottom:1px solid var(--line);padding:12px 12px 12px}
   .brow:last-child{border-bottom:none}
+  .brow{transition:background .3s, box-shadow .3s}
+  .brow.lit{background:rgba(255,177,0,.09);box-shadow:inset 4px 0 0 var(--amber), 0 0 22px rgba(255,177,0,.18)}
+  .brow.lit .dest{color:var(--amber)}
+  .ledig{display:none;margin-top:10px}
+  .brow.lit .ledig{display:block}
+  .ledig .lh{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.14em;color:var(--amber);margin-bottom:6px}
+  .ledig .lh .dot{background:var(--amber);animation:pulse 1.2s ease-in-out infinite}
+  .ledig a{display:block;background:var(--panel2);border:1px solid var(--amber-dim);border-radius:4px;padding:10px 12px;margin-bottom:6px;color:var(--ink);text-decoration:none;font-size:14.5px}
+  .ledig a::after{content:" ↗";color:var(--amber)}
+  #ledigtotal{color:var(--amber);font-weight:700}
   .btop{display:flex;align-items:center;justify-content:space-between;gap:8px}
   .dest{font-family:var(--mono);font-weight:700;font-size:17px;letter-spacing:.1em;color:var(--ink)}
   .dest small{display:block;font-size:10.5px;font-weight:400;letter-spacing:.14em;color:var(--mut);margin-top:2px}
@@ -224,6 +234,7 @@
     <div id="klokke">--:--:--</div>
   </div>
   <div class="radarline"><span class="dot off" id="rdot"></span><span id="rtekst">RADAR: SJEKKER…</span></div>
+  <div class="radarline" id="lediglinje" style="display:none"><span class="dot" style="background:var(--amber);animation:pulse 1.2s ease-in-out infinite"></span><span id="ledigtotal"></span></div>
   <div class="radarline" id="kanallinje" style="display:none"><span class="dot" id="kdot"></span><span id="ktekst"></span></div>
   <nav>
     <a href="#tavle">TAVLE</a><a href="#vinduer">VINDUER</a>
@@ -253,6 +264,7 @@
           <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
           <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
         </div>
+        <div class="ledig"><div class="lh"><span class="dot"></span><span class="lt">LEDIG NÅ</span></div><div class="ll"></div></div>
         <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: Vy tog filteret sjekket, den ene utlysningen var …"></textarea>
         <div class="bact">
           <button class="btn smal gul" data-stemple>Stemple sjekket nå</button>
@@ -274,6 +286,7 @@
           <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
           <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
         </div>
+        <div class="ledig"><div class="lh"><span class="dot"></span><span class="lt">LEDIG NÅ</span></div><div class="ll"></div></div>
         <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: ny portal funnet via Finn annonse, åpen søknad sendt …"></textarea>
         <div class="bact">
           <button class="btn smal gul" data-stemple>Stemple sjekket nå</button>
@@ -295,6 +308,7 @@
           <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
           <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
         </div>
+        <div class="ledig"><div class="lh"><span class="dot"></span><span class="lt">LEDIG NÅ</span></div><div class="ll"></div></div>
         <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: melding sendt til leder om retur, svar ventes …"></textarea>
         <div class="bact">
           <button class="btn smal gul" data-stemple>Stemple sjekket nå</button>
@@ -316,6 +330,7 @@
           <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
           <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
         </div>
+        <div class="ledig"><div class="lh"><span class="dot"></span><span class="lt">LEDIG NÅ</span></div><div class="ll"></div></div>
         <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: CSA stilling utlyst, søkt …"></textarea>
         <div class="bact">
           <button class="btn smal gul" data-stemple>Stemple sjekket nå</button>
@@ -337,6 +352,7 @@
           <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
           <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
         </div>
+        <div class="ledig"><div class="lh"><span class="dot"></span><span class="lt">LEDIG NÅ</span></div><div class="ll"></div></div>
         <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: flyekspeditør OSL utlyst på Jobbnorge …"></textarea>
         <div class="bact">
           <button class="btn smal gul" data-stemple>Stemple sjekket nå</button>
@@ -417,6 +433,7 @@ function relTid(iso){
   return Math.round(t/24)+" d siden";
 }
 
+let ledigSum=0;
 function visMaalAuto(navnRegex,data){
   const rad=[...document.querySelectorAll(".brow")].find(r=>navnRegex.test(r.dataset.maal));
   if(!rad) return;
@@ -426,6 +443,11 @@ function visMaalAuto(navnRegex,data){
   if(t.ok){ rEl.textContent="OK"; rEl.classList.remove("warn"); }
   else{ rEl.textContent="FEIL x"+(t.consecutive_failures||1); rEl.classList.add("warn"); }
   nEl.textContent=t.new_hits||0;
+  const open=t.open||[];
+  rad.classList.toggle("lit",open.length>0);
+  rad.querySelector(".lt").textContent = open.length===1 ? "LEDIG NÅ · 1 STILLING" : "LEDIG NÅ · "+open.length+" STILLINGER";
+  rad.querySelector(".ll").innerHTML = open.map(o=>`<a href="${trygLenke(o.link)}" target="_blank" rel="noopener">${esc(o.text)}</a>`).join("");
+  ledigSum += open.length;
   const aEl=rad.querySelector('[data-auto="ann"]');
   if(aEl) aEl.textContent=(t.listings??"–");
   if((t.new_hits||0)>0) nEl.classList.add("nytt");
@@ -443,8 +465,12 @@ async function lastStatus(){
     if(min<=720){ rdot.className="dot live"; rtekst.textContent="RADAR: SIST SJEKKET "+relTid(d.generated).toUpperCase(); }
     else{ rdot.className="dot stale"; rtekst.textContent="RADAR: IKKE SJEKKET PÅ "+relTid(d.generated).replace(" siden","").toUpperCase()+" · TRYKK KJØR SJEKK NÅ"; }
     visKanaler(d.channels);
+    ledigSum=0;
     visMaalAuto(/vy/i,d); visMaalAuto(/iss/i,d); visMaalAuto(/sas/i,d);
     visMaalAuto(/norwegian/i,d); visMaalAuto(/wider/i,d);
+    const ll=document.getElementById("lediglinje");
+    ll.style.display = ledigSum ? "flex" : "none";
+    document.getElementById("ledigtotal").textContent = ledigSum===1 ? "1 STILLING DU VIL HA ER LEDIG NÅ" : ledigSum+" STILLINGER DU VIL HA ER LEDIG NÅ";
     const al=(d.recent_alerts||[]).slice(0,8);
     alertsEl.innerHTML = al.length
       ? al.map(a=>`<a class="alert" href="${trygLenke(a.link)}" target="_blank" rel="noopener"><span class="at">${esc((a.target||"").toUpperCase())} · ${relTid(a.time).toUpperCase()}</span>${esc(a.text)}</a>`).join("")
