@@ -1,18 +1,26 @@
 {
- "seen": [
-  "ISS portal|https://iss.attract.reachmee.com/jobs/3690-bli-en-del-av-det-nye-servicesenteret-pa-oslo",
-  "ISS portal|https://iss.attract.reachmee.com/jobs/3743-utforsk-en-meningsfull-karriere-ved-oslo-luft",
-  "ISS portal|https://iss.attract.reachmee.com/jobs/3771-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-har",
-  "ISS portal|https://iss.attract.reachmee.com/jobs/3775-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-san",
-  "ISS portal|https://iss.attract.reachmee.com/jobs/3782-liker-du-a-vaere-i-aktivitet-pa-jobb-vi-soker",
-  "Vy karriere|webcruiter|5164307165"
- ],
- "fail": {
-  "Vy karriere": 0,
-  "ISS portal": 0,
-  "SAS Ground Handling": 0,
-  "Norwegian (Red Handling)": 0,
-  "Widerøe Ground Handling": 0
- },
- "alerts": []
+  "seen": [
+    "ISS portal|https://iss.attract.reachmee.com/jobs/3690-bli-en-del-av-det-nye-servicesenteret-pa-oslo",
+    "ISS portal|https://iss.attract.reachmee.com/jobs/3743-utforsk-en-meningsfull-karriere-ved-oslo-luft",
+    "ISS portal|https://iss.attract.reachmee.com/jobs/3771-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-har",
+    "ISS portal|https://iss.attract.reachmee.com/jobs/3775-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-san",
+    "ISS portal|https://iss.attract.reachmee.com/jobs/3782-liker-du-a-vaere-i-aktivitet-pa-jobb-vi-soker",
+    "Vy karriere|webcruiter|5164307165"
+  ],
+  "fail": {
+    "Vy karriere": 0,
+    "ISS portal": 0,
+    "SAS Ground Handling": 0,
+    "Norwegian (Red Handling)": 0,
+    "Widerøe Ground Handling": 0
+  },
+  "alerts": [],
+  "heartbeat_week": "2026-W45",
+  "last_counts": {
+    "Vy karriere": 22,
+    "ISS portal": 12,
+    "SAS Ground Handling": 1,
+    "Norwegian (Red Handling)": 1,
+    "Widerøe Ground Handling": 4
+  }
 }
