@@ -349,8 +349,9 @@
     <div class="alerts" id="alerts"><div class="tom">INGEN RADARTREFF LASTET.</div></div>
     <div class="bact" style="margin-top:10px">
       <button class="btn smal" id="oppdater">Last radarstatus på nytt</button>
+      <a class="btn smal" href="https://github.com/Facha003/job-radar/actions/workflows/radar_check.yml" target="_blank" rel="noopener">Kjør sjekk nå</a>
     </div>
-    <p class="fotnote">Radarlinjene og treffene fylles automatisk fra radaren hver halvtime. Status, notat og stempel lagres i nettleseren din. Bare stillinger på Gardermoen havner her.</p>
+    <p class="fotnote">Radaren sjekker automatisk, men GitHub kjører den i praksis hver 4. til 8. time. Når et vindu åpner seg: trykk Kjør sjekk nå, så Run workflow. Status, notat og stempel lagres i nettleseren din. Bare stillinger på Gardermoen havner her.</p>
   </section>
 
   <section id="vinduer">
@@ -437,8 +438,10 @@ async function lastStatus(){
     if(!r.ok) throw 0;
     const d=await r.json();
     const min=Math.round((Date.now()-Date.parse(d.generated))/60000);
-    if(min<=45){ rdot.className="dot live"; rtekst.textContent="RADAR: TILKOBLET · KJØRTE "+relTid(d.generated).toUpperCase(); }
-    else{ rdot.className="dot stale"; rtekst.textContent="RADAR: GAMMEL DATA · "+relTid(d.generated).toUpperCase()+" · SJEKK ACTIONS"; }
+    /* GitHub runs the free schedule every 4 to 8 hours in practice, so only
+       warn when a check is clearly overdue (12 h), not after 45 min */
+    if(min<=720){ rdot.className="dot live"; rtekst.textContent="RADAR: SIST SJEKKET "+relTid(d.generated).toUpperCase(); }
+    else{ rdot.className="dot stale"; rtekst.textContent="RADAR: IKKE SJEKKET PÅ "+relTid(d.generated).replace(" siden","").toUpperCase()+" · TRYKK KJØR SJEKK NÅ"; }
     visKanaler(d.channels);
     visMaalAuto(/vy/i,d); visMaalAuto(/iss/i,d); visMaalAuto(/sas/i,d);
     visMaalAuto(/norwegian/i,d); visMaalAuto(/wider/i,d);

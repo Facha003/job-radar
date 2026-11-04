@@ -361,14 +361,16 @@ def check_target(target, seen_keys):
 
 
 def weekly_heartbeat(cfg, run_report, sent_week, last_counts, force=False):
-    """Once a week (first run on Monday, Oslo morning) send a 'radar is alive'
+    """Once a week (first run on or after Monday morning) send a 'radar is alive'
     summary with live listing counts per company. A count that drops to 0 or
     halves since last week is flagged: that is what a quietly broken parser
     looks like. Returns the updated (sent_week, last_counts)."""
     now = datetime.now(timezone.utc)
     iso = now.isocalendar()
     week = f"{iso[0]}-W{iso[1]:02d}"
-    if not force and (now.weekday() != 0 or now.hour < 6 or sent_week == week):
+    # first run on or after Monday 06 UTC each week: if GitHub skips Monday,
+    # the mail just comes Tuesday instead of being lost for the week
+    if not force and (sent_week == week or (now.weekday() == 0 and now.hour < 6)):
         return sent_week, last_counts
 
     lines, warnings, counts = [], [], {}
