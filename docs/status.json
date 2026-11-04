@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-04T06:54:53+00:00",
+  "generated": "2026-11-04T15:18:44+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -18,8 +18,8 @@
       "url": "https://iss.attract.reachmee.com/jobs",
       "ok": true,
       "consecutive_failures": 0,
-      "new_hits": 0,
-      "total_seen": 4
+      "new_hits": 1,
+      "total_seen": 5
     },
     {
       "name": "SAS Ground Handling",
@@ -31,6 +31,12 @@
     }
   ],
   "recent_alerts": [
+    {
+      "time": "2026-11-04T15:18:43+00:00",
+      "target": "ISS portal",
+      "text": "Liker du å være i aktivitet på jobb? Vi søker servicehelt til vikariat på Værnes lufthavn!",
+      "link": "https://iss.attract.reachmee.com/jobs/3782-liker-du-a-vaere-i-aktivitet-pa-jobb-vi-soker"
+    },
     {
       "time": "2026-10-22T14:37:04+00:00",
       "target": "ISS portal",
