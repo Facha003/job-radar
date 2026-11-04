@@ -76,7 +76,19 @@
         "gate",
         "landside",
         "bag drop",
-        "bagasjedrop"
+        "bagasjedrop",
+        "oversize",
+        "spesialbagasje",
+        "baggage service",
+        "bagasjeservice",
+        "lost and found",
+        "hittegods",
+        "billett",
+        "ticket desk",
+        "transfer desk",
+        "service desk",
+        "servicesenter",
+        "kundesenter"
       ],
       "exclude_keywords": [
         "ramp",
@@ -122,7 +134,19 @@
         "innsjekk",
         "gate",
         "service agent",
-        "servicemedarbeider"
+        "servicemedarbeider",
+        "oversize",
+        "spesialbagasje",
+        "baggage service",
+        "bagasjeservice",
+        "lost and found",
+        "hittegods",
+        "billett",
+        "ticket desk",
+        "transfer desk",
+        "service desk",
+        "servicesenter",
+        "kundesenter"
       ],
       "exclude_keywords": [
         "ramp",
@@ -174,7 +198,19 @@
         "innsjekk",
         "gate",
         "kundeservice",
-        "servicemedarbeider"
+        "servicemedarbeider",
+        "oversize",
+        "spesialbagasje",
+        "baggage service",
+        "bagasjeservice",
+        "lost and found",
+        "hittegods",
+        "billett",
+        "ticket desk",
+        "transfer desk",
+        "service desk",
+        "servicesenter",
+        "kundesenter"
       ],
       "exclude_keywords": [
         "ramp",
