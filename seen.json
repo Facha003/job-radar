@@ -5,6 +5,7 @@
     "ISS portal|https://iss.attract.reachmee.com/jobs/3771-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-har",
     "ISS portal|https://iss.attract.reachmee.com/jobs/3775-har-du-lyst-pa-en-aktiv-arbeidshverdag-pa-san",
     "ISS portal|https://iss.attract.reachmee.com/jobs/3782-liker-du-a-vaere-i-aktivitet-pa-jobb-vi-soker",
+    "Norwegian (Red Handling)|https://careers.norwegian.com/job/Gardermoen-Lead-Customer-Service-Agent%2C-OSL-2060/1376887057/",
     "Vy karriere|webcruiter|5164307165"
   ],
   "fail": {
@@ -14,7 +15,14 @@
     "Norwegian (Red Handling)": 0,
     "Widerøe Ground Handling": 0
   },
-  "alerts": [],
+  "alerts": [
+    {
+      "time": "2026-11-06T11:24:25+00:00",
+      "target": "Norwegian (Red Handling)",
+      "text": "Lead Customer Service Agent, OSL",
+      "link": "https://careers.norwegian.com/job/Gardermoen-Lead-Customer-Service-Agent%2C-OSL-2060/1376887057/"
+    }
+  ],
   "heartbeat_week": "2026-W45",
   "last_counts": {
     "Vy karriere": 22,

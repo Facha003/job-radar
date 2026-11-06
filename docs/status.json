@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-06T03:20:04+00:00",
+  "generated": "2026-11-06T11:24:26+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -12,7 +12,7 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 1,
-      "listings": 23,
+      "listings": 24,
       "open": []
     },
     {
@@ -40,10 +40,15 @@
       "url": "https://careers.norwegian.com/search/?q=&locationsearch=Gardermoen",
       "ok": true,
       "consecutive_failures": 0,
-      "new_hits": 0,
-      "total_seen": 0,
-      "listings": 1,
-      "open": []
+      "new_hits": 1,
+      "total_seen": 1,
+      "listings": 2,
+      "open": [
+        {
+          "text": "Lead Customer Service Agent, OSL",
+          "link": "https://careers.norwegian.com/job/Gardermoen-Lead-Customer-Service-Agent%2C-OSL-2060/1376887057/"
+        }
+      ]
     },
     {
       "name": "Widerøe Ground Handling",
@@ -56,5 +61,12 @@
       "open": []
     }
   ],
-  "recent_alerts": []
+  "recent_alerts": [
+    {
+      "time": "2026-11-06T11:24:25+00:00",
+      "target": "Norwegian (Red Handling)",
+      "text": "Lead Customer Service Agent, OSL",
+      "link": "https://careers.norwegian.com/job/Gardermoen-Lead-Customer-Service-Agent%2C-OSL-2060/1376887057/"
+    }
+  ]
 }
