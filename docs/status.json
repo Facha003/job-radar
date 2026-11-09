@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-08T22:23:03+00:00",
+  "generated": "2026-11-09T01:53:31+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -12,7 +12,7 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 1,
-      "listings": 24,
+      "listings": 22,
       "open": []
     },
     {
