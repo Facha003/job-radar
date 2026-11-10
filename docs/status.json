@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-10T10:57:42+00:00",
+  "generated": "2026-11-10T18:34:27+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -12,7 +12,7 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 1,
-      "listings": 22,
+      "listings": 23,
       "open": []
     },
     {
@@ -22,7 +22,7 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 5,
-      "listings": 7,
+      "listings": 12,
       "open": []
     },
     {
@@ -57,7 +57,7 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 0,
-      "listings": 2,
+      "listings": 3,
       "open": []
     }
   ],
