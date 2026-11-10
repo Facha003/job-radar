@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-10T02:38:23+00:00",
+  "generated": "2026-11-10T10:57:42+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -53,10 +53,11 @@
     {
       "name": "Widerøe Ground Handling",
       "url": "https://jobbiwideroe.no/karriere-i-wideroe/bakkepersonell/",
-      "ok": false,
-      "consecutive_failures": 1,
+      "ok": true,
+      "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 0,
+      "listings": 2,
       "open": []
     }
   ],
