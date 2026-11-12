@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-12T18:32:04+00:00",
+  "generated": "2026-11-12T23:48:15+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -22,7 +22,7 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 5,
-      "listings": 10,
+      "listings": 9,
       "open": []
     },
     {
@@ -39,7 +39,7 @@
       "name": "Norwegian (Red Handling)",
       "url": "https://careers.norwegian.com/search/?q=&locationsearch=Gardermoen",
       "ok": false,
-      "consecutive_failures": 4,
+      "consecutive_failures": 5,
       "new_hits": 0,
       "total_seen": 1,
       "open": [
@@ -52,11 +52,10 @@
     {
       "name": "Widerøe Ground Handling",
       "url": "https://jobbiwideroe.no/karriere-i-wideroe/bakkepersonell/",
-      "ok": true,
-      "consecutive_failures": 0,
+      "ok": false,
+      "consecutive_failures": 1,
       "new_hits": 0,
       "total_seen": 0,
-      "listings": 3,
       "open": []
     }
   ],
