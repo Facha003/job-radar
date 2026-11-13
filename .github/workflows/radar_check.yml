@@ -62,7 +62,7 @@ jobs:
       # Manual runs ("Kjør sjekk nå") always go through.
       - name: Checked recently?
         id: gate
-        if: github.event_name == 'schedule'
+        if: true
         run: |
           last=$(jq -r '.generated // empty' docs/status.json 2>/dev/null || true)
           if [ -n "$last" ] && last_s=$(date -u -d "$last" +%s 2>/dev/null); then
