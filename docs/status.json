@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-13T06:20:04+00:00",
+  "generated": "2026-11-13T14:50:47+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -22,7 +22,7 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 5,
-      "listings": 9,
+      "listings": 10,
       "open": []
     },
     {
@@ -32,14 +32,14 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 0,
-      "listings": 1,
+      "listings": 2,
       "open": []
     },
     {
       "name": "Norwegian (Red Handling)",
       "url": "https://careers.norwegian.com/search/?q=&locationsearch=Gardermoen",
       "ok": false,
-      "consecutive_failures": 6,
+      "consecutive_failures": 7,
       "new_hits": 0,
       "total_seen": 1,
       "open": [
