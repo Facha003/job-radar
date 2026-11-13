@@ -1,6 +1,6 @@
 # NETTSIDE OPPSETT: Jobbradar tavla
 
-Ærlig premiss først: en nettside kan ikke selv sjekke vy.no eller ISS fra nettleseren din, CORS stopper det. Det som holder deg oppdatert er radaren i GitHub Actions som kjører hvert 30. minutt og skriver `docs/status.json`. Tavla leser den fila og viser tilstanden. Push varslene fra ntfy og Finn er fortsatt alarmen. Tavla er cockpiten.
+Ærlig premiss først: en nettside kan ikke selv sjekke vy.no eller ISS fra nettleseren din, CORS stopper det. Det som holder deg oppdatert er radaren i GitHub Actions, som sjekker så ofte GitHub slipper den til (den ber om hvert 30. minutt) og skriver `docs/status.json`. Tavla leser den fila og viser tilstanden. Push varslene fra ntfy og Finn er fortsatt alarmen. Tavla er cockpiten.
 
 ---
 
@@ -8,16 +8,20 @@
 
 ```
 job-radar/
-  job_radar.py            (versjon 2, bytt ut den gamle)
+  job_radar.py            (versjon 3)
   config.json
   requirements.txt        (avhengigheter, brukes av workflow)
+  requirements-dev.txt    (det samme pluss pytest, for testene)
   seen.json               (lages automatisk)
+  tests/
+    test_job_radar.py     (testene, kjøres med pytest)
   docs/
     index.html            (tavla)
     status.json           (lages automatisk av skriptet)
   .github/
     workflows/
-      radar_check.yml     (versjon 2, bytt ut den gamle)
+      radar_check.yml     (versjon 3, selve radaren)
+      tests.yml           (kjører testene når koden endres)
 ```
 
 ---
@@ -26,7 +30,7 @@ job-radar/
 
 1. **Flytt ntfy topicen til en secret.** Settings, Secrets and variables, Actions, ny secret med navn `NTFY_TOPIC` og topicen din som verdi. La feltet i config.json stå som CHANGE ME. Skriptet foretrekker secreten. Grunnen: gratis GitHub Pages krever at repoet er **public**, og da skal ikke topicen ligge i klartekst.
 2. Gjør repoet public (Settings, General, Danger Zone, Change visibility). Det som ligger igjen er søkeord og jobblenker, ingenting sensitivt.
-3. Bytt ut `job_radar.py` og `radar_check.yml` med versjon 2 filene.
+3. Legg `job_radar.py`, `config.json`, `requirements.txt` og `.github/workflows/radar_check.yml` i repoet.
 4. Legg `index.html` i `docs/` mappa og push.
 5. Settings, Pages, Source: Deploy from a branch, velg `main` og `/docs`, lagre.
 6. Actions fanen, job radar, Run workflow. Da finnes `status.json` fra første stund.
@@ -45,14 +49,18 @@ job-radar/
 
 To nivåer. VARSLING linja på tavla viser hva som er aktivt.
 
-**Nivå 1, virker fra dag én uten oppsett:** når radaren finner treff, oppretter workflowen et GitHub issue i repoet ditt, og GitHub sender deg epost om nye issues automatisk (standardinnstilling for egne repo). Én epost per kjøring uansett antall treff, med tittel, sted, frist og direktelenke til utlysningen. Sjekk at epost er på under github.com/settings/notifications, "Watching".
+**Nivå 1, virker fra dag én uten oppsett:** når radaren finner treff, oppretter skriptet et GitHub issue i repoet ditt, og GitHub sender deg epost om nye issues automatisk (standardinnstilling for egne repo). Én epost per kjøring uansett antall treff, med tittel, sted, frist og direktelenke til utlysningen. Sjekk at epost er på under github.com/settings/notifications, "Watching".
+
+Samme vei går tre andre meldinger: advarsel når en side har feilet 5 sjekker på rad, beskjed når den virker igjen, og den ukentlige "Radar lever". Disse issuene lukkes med en gang, så bare ekte treff blir stående åpne til du har sett på dem.
+
+Et treff regnes ikke som varslet før GitHub (eller en annen kanal) har tatt imot meldingen. Feiler sendingen, prøver radaren på nytt ved neste kjøring.
 
 **Nivå 2, epost rett fra din egen Gmail (valgfritt):**
 1. Skru på totrinnsverifisering på Google kontoen hvis du ikke har det.
 2. Lag et app passord på myaccount.google.com/apppasswords.
 3. Legg inn to secrets i GitHub: `SMTP_USER` (epostadressen din) og `SMTP_PASS` (app passordet). Da sender skriptet eposten selv, og issue varselet skrus av automatisk så du slipper dobbelt.
 
-Mottaker er secret `ALERT_EMAIL` i GitHub (feltet `email` i config.json står tomt med vilje — repoet er public, og epostadressen skal ikke ligge i klartekst). Test lokalt med `python job_radar.py --test` (krever at smtp feltene i config.json eller miljøvariablene er satt).
+Mottaker er secret `ALERT_EMAIL` i GitHub (feltet `email` i config.json står tomt med vilje — repoet er public, og epostadressen skal ikke ligge i klartekst). Test lokalt med `python job_radar.py --test` (krever at smtp feltene i config.json eller miljøvariablene er satt). Fra GitHub: Actions, job radar, Run workflow, kryss av `test_alert`.
 
 ---
 
@@ -62,6 +70,8 @@ Mottaker er secret `ALERT_EMAIL` i GitHub (feltet `email` i config.json står to
 * Lagringen er per nettleser. Mobilen og PCen har hver sin tavle. Bruk mobilen som hovedcockpit.
 * Rutinelistene nullstiller seg selv: daglig ved midnatt, ukentlig ved ny uke.
 * ISS portalen er verifisert 10.07.2026: iss.no (no.issworld.com) lenker selv til iss.attract.reachmee.com/jobs, og siden viser alle utlysningene uten JavaScript. VERIFISER merket er derfor fjernet fra tavla. Det eneste som gjenstår å se, er om aviation stillingene på OSL faktisk publiseres der når de kommer.
+* Norwegian leses fra november 2026 fra SAP sin åpne stillingsfeed (`"type": "successfactors"` i config.json), ikke fra careers.norwegian.com. Karrieresiden deres ligger bak Cloudflare, som avviser GitHub sine servere med 403 på alle sider. Feeden har alle Norwegian stillingene, men ikke noe eget stedsfelt. Derfor: står det Oslo, OSL eller Gardermoen i tittel eller annonsetekst, er det treff. Står det et annet sted i tittelen (lista `location_elsewhere`), er det stille. Står det ingen steder, varsler radaren likevel, merket "sted ikke bekreftet, sjekk selv".
+* Kjører du `python job_radar.py` på egen maskin, er det bare en forhåndsvisning. Den sender ingenting og lagrer ingenting. `seen.json` og `docs/status.json` eies av kjøringene på GitHub. Ekte kjøring lokalt krever `--write`.
 * Vy sjekkes ikke lenger ved å skrape vy.no (siden viser bare de 8 første utlysningene uten JavaScript). Radaren spør i stedet Webcruiter sitt API direkte (`"type": "webcruiter"` i config.json) og ser ALLE utlysningene i Vygruppen, med tittel, sted og frist.
 
 ---
@@ -69,6 +79,7 @@ Mottaker er secret `ALERT_EMAIL` i GitHub (feltet `email` i config.json står to
 ## Feilsøk
 
 * **FRAKOBLET på Pages:** sjekk at Actions har kjørt etter oppsettet og at `docs/status.json` faktisk ligger i repoet.
-* **GAMMEL DATA:** siste kjøring feilet eller cron henger. Åpne Actions fanen og se på loggen.
-* **Ping om FEIL x5:** målsiden er flyttet eller blokkerer. Oppdater url i config.json. Mest sannsynlig ISS, du vet hvorfor.
+* **GAMMEL DATA:** siste kjøring feilet eller cron henger. Åpne Actions fanen og se på loggen. GitHub hopper over mange planlagte kjøringer, så noen timer mellom sjekkene er normalt. Trykk Kjør sjekk nå når det haster.
+* **Epost om at en side ikke svarer (FEIL x5):** målsiden er flyttet, nede eller blokkerer. Tavla viser årsaken ved siden av FEIL, for eksempel `HTTP 403 Forbidden`. Kjør workflowen med `dry_run` for å se hva siden svarer GitHub. Oppdater url i config.json hvis siden er flyttet.
+* **Treff merket "sted ikke bekreftet":** Norwegian stilling der verken tittel eller tekst nevner Oslo. Åpne lenka og se. Er det en flyplass som går igjen, legg navnet i `location_elsewhere` i config.json.
 * **Får ikke valgt /docs under Pages:** mappa må ligge på main og inneholde index.html før valget dukker opp.

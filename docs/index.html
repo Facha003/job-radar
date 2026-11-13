@@ -367,7 +367,7 @@
       <button class="btn smal" id="oppdater">Last radarstatus på nytt</button>
       <a class="btn smal" href="https://github.com/Facha003/job-radar/actions/workflows/radar_check.yml" target="_blank" rel="noopener">Kjør sjekk nå</a>
     </div>
-    <p class="fotnote">Radaren sjekker automatisk, men GitHub kjører den i praksis hver 4. til 8. time. Når et vindu åpner seg: trykk Kjør sjekk nå, så Run workflow. Status, notat og stempel lagres i nettleseren din. Bare stillinger på Gardermoen havner her.</p>
+    <p class="fotnote">Radaren ber GitHub om en sjekk hvert 30. minutt, men GitHub hopper over mange av dem, så det kan gå timer mellom. Når et vindu åpner seg: trykk Kjør sjekk nå, så Run workflow. Status, notat og stempel lagres i nettleseren din. Bare stillinger på Gardermoen havner her.</p>
   </section>
 
   <section id="vinduer">
@@ -385,7 +385,7 @@
 
 </main>
 
-<footer>JOBBRADAR · BYGD 09.07.2026 · OPPDATERT 04.11.2026 · MASKINEN VARSLER, DU SØKER</footer>
+<footer>JOBBRADAR · BYGD 09.07.2026 · OPPDATERT 13.11.2026 · MASKINEN VARSLER, DU SØKER</footer>
 
 <script>
 /* ---------- trygg lagring: localStorage der det finnes, minne ellers ---------- */
@@ -441,27 +441,35 @@ function visMaalAuto(navnRegex,data){
   const rEl=rad.querySelector('[data-auto="radar"]'), nEl=rad.querySelector('[data-auto="nytt"]');
   if(!t){ rEl.textContent="ikke i status"; return; }
   if(t.ok){ rEl.textContent="OK"; rEl.classList.remove("warn"); }
-  else{ rEl.textContent="FEIL x"+(t.consecutive_failures||1); rEl.classList.add("warn"); }
+  else{
+    /* error text comes from the radar itself (HTTP status etc.), shown as plain text */
+    rEl.textContent="FEIL x"+(t.consecutive_failures||1)+(t.error?" · "+String(t.error).slice(0,60):"");
+    rEl.classList.add("warn");
+  }
   nEl.textContent=t.new_hits||0;
   const open=t.open||[];
   rad.classList.toggle("lit",open.length>0);
-  rad.querySelector(".lt").textContent = open.length===1 ? "LEDIG NÅ · 1 STILLING" : "LEDIG NÅ · "+open.length+" STILLINGER";
+  const gammel = t.ok ? "" : " · SIST KJENT";
+  rad.querySelector(".lt").textContent = (open.length===1 ? "LEDIG NÅ · 1 STILLING" : "LEDIG NÅ · "+open.length+" STILLINGER")+gammel;
   rad.querySelector(".ll").innerHTML = open.map(o=>`<a href="${trygLenke(o.link)}" target="_blank" rel="noopener">${esc(o.text)}</a>`).join("");
   ledigSum += open.length;
   const aEl=rad.querySelector('[data-auto="ann"]');
   if(aEl) aEl.textContent=(t.listings??"–");
-  if((t.new_hits||0)>0) nEl.classList.add("nytt");
+  nEl.classList.toggle("nytt",(t.new_hits||0)>0);
 }
 
-async function lastStatus(){
-  rtekst.textContent="RADAR: SJEKKER…";
+let laster=false;
+async function lastStatus(stille){
+  if(laster) return;
+  laster=true;
+  if(stille!==true) rtekst.textContent="RADAR: SJEKKER…";
   try{
     const r=await fetch("./status.json",{cache:"no-store"});
     if(!r.ok) throw 0;
     const d=await r.json();
     const min=Math.round((Date.now()-Date.parse(d.generated))/60000);
-    /* GitHub runs the free schedule every 4 to 8 hours in practice, so only
-       warn when a check is clearly overdue (12 h), not after 45 min */
+    /* GitHub's free schedule skips most slots, hours can pass between runs,
+       so only warn when a check is clearly overdue (12 h), not after 45 min */
     if(min<=720){ rdot.className="dot live"; rtekst.textContent="RADAR: SIST SJEKKET "+relTid(d.generated).toUpperCase(); }
     else{ rdot.className="dot stale"; rtekst.textContent="RADAR: IKKE SJEKKET PÅ "+relTid(d.generated).replace(" siden","").toUpperCase()+" · TRYKK KJØR SJEKK NÅ"; }
     visKanaler(d.channels);
@@ -480,10 +488,13 @@ async function lastStatus(){
     rtekst.textContent="RADAR: FRAKOBLET · SIDEN VIRKER, MEN UTEN SANNTID";
     visKanaler(null);
     alertsEl.innerHTML=`<div class="tom">FANT IKKE status.json. KJØR SIDEN PÅ GITHUB PAGES SAMMEN MED RADAREN FOR SANNTID.</div>`;
-  }
+  }finally{ laster=false; }
 }
-document.getElementById("oppdater").addEventListener("click",lastStatus);
+document.getElementById("oppdater").addEventListener("click",()=>lastStatus());
 lastStatus();
+/* hent ny status hvert 5. minutt, og med en gang du kommer tilbake til fanen/appen */
+setInterval(()=>{ if(!document.hidden) lastStatus(true); },5*60*1000);
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) lastStatus(true); });
 
 /* ---------- manuelt lag på tavla ---------- */
 function fargFlap(sel){

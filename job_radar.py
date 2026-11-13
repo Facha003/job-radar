@@ -1,30 +1,45 @@
 #!/usr/bin/env python3
 """
-Job Radar for Fardin, versjon 2.
-Watches career pages for target roles, pings your phone, and writes
-docs/status.json so the dashboard (docs/index.html) can show live state.
+Job Radar, versjon 3.
+Watches career pages for target roles, alerts you, and writes docs/status.json
+so the dashboard (docs/index.html) can show live state.
 
-Install:    pip install requests beautifulsoup4
-Configure:  edit config.json (targets, keywords, ntfy topic)
-Run once:   python job_radar.py
-Test ping:  python job_radar.py --test
-State:      seen.json is created automatically. Delete it to re-alert on everything.
-Status:     docs/status.json is rewritten every run. The dashboard reads it.
+Install:     pip install -r requirements.txt
+Configure:   edit config.json (targets, keywords)
+Preview:     python job_radar.py            (local: reads everything, sends and saves nothing)
+Debug:       python job_radar.py --dry-run  (same, plus every listing each source returned)
+Real run:    python job_radar.py --write    (what GitHub Actions does: alert + save state)
+Test alert:  python job_radar.py --test
+State:       seen.json is created automatically. Delete it to re-alert on everything.
+Status:      docs/status.json is rewritten every real run. The dashboard reads it.
 
-Designed to run every 30 minutes via GitHub Actions (see radar_check.yml).
-Polite by design: one GET request per target per run against public career pages.
+Designed to run on a schedule in GitHub Actions (see .github/workflows/radar_check.yml).
+Polite by design: one request per target per run against public career pages and feeds.
 Do NOT point this at finn.no (their terms prohibit scraping; use their alerts).
+
+Three kinds of source (the "type" field of a target in config.json):
+  (none)           an HTML career page, read with BeautifulSoup
+  webcruiter       the Webcruiter candidate JSON API (Vy)
+  successfactors   the public SAP SuccessFactors job feed (Norwegian). Their own
+                   career site sits behind a Cloudflare challenge that GitHub's
+                   servers never pass; the feed is the same data, hosted by SAP.
 """
 
+from __future__ import annotations
+
+import argparse
+import html
 import json
 import os
 import re
 import smtplib
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
+from typing import Callable, NamedTuple
 from urllib.parse import urljoin
 
 import requests
@@ -44,14 +59,46 @@ HEADERS = {
     "Accept-Language": "nb-NO,nb;q=0.9,en;q=0.8",
 }
 
-FAIL_WARN_THRESHOLD = 5   # consecutive failures before you get a warning ping
+FAIL_WARN_THRESHOLD = 5   # consecutive failures before you get a warning
 MAX_ALERT_HISTORY = 25    # alerts kept in seen.json and shown on the dashboard
 DIGEST_THRESHOLD = 5      # more hits than this in one run -> one summary ping, not a storm
+DEFAULT_DASHBOARD = "https://facha003.github.io/job-radar/"
 
+UNREADABLE_TAG = "  [kunne ikke lese annonsen, sjekk rollen selv]"
+LOCATION_TAG = "  [sted ikke bekreftet, sjekk selv]"
+
+
+class SourceError(Exception):
+    """A source answered, but not with what we expect (layout or feed changed)."""
+
+
+class Hit(NamedTuple):
+    text: str
+    link: str
+    key: str
+
+
+@dataclass
+class CheckResult:
+    hits: list            # new postings (not in seen.json) that should alert
+    open: list            # every wanted posting live right now: [{"text", "link"}]
+    listings: int | None  # how many listings the source showed (parser health)
+
+
+Log = Callable[[str], None]
+
+
+def _quiet(_line: str) -> None:
+    pass
+
+
+# --------------------------------------------------------------------------
+# small helpers
+# --------------------------------------------------------------------------
 
 def fetch(method, url, **kwargs):
     """requests wrapper with one retry, so a transient blip does not mark a
-    target as failed on the dashboard until the next cron run."""
+    target as failed on the dashboard until the next scheduled run."""
     last_exc = None
     for attempt in range(2):
         if attempt:
@@ -61,15 +108,19 @@ def fetch(method, url, **kwargs):
         except requests.RequestException as exc:
             last_exc = exc
             continue
-        if resp.status_code >= 500 and attempt == 0:
+        if (resp.status_code >= 500 or resp.status_code == 429) and attempt == 0:
             continue
         resp.raise_for_status()
         return resp
     raise last_exc
 
 
+def now_utc():
+    return datetime.now(timezone.utc)
+
+
 def now_iso():
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return now_utc().isoformat(timespec="seconds")
 
 
 def load_json(path, default):
@@ -79,12 +130,50 @@ def load_json(path, default):
 
 
 def save_json(path, data):
+    """Write via a temp file so a crash mid-write can never leave half a file."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, path)
 
+
+def squash(text):
+    return " ".join((text or "").split())
+
+
+def lower_list(target, field):
+    return [str(s).lower() for s in target.get(field, [])]
+
+
+def short_error(exc):
+    """One readable line for the log, the dashboard and the warning mail."""
+    resp = getattr(exc, "response", None)
+    if resp is not None and getattr(resp, "status_code", None):
+        reason = getattr(resp, "reason", "") or ""
+        return f"HTTP {resp.status_code} {reason}".strip()
+    if isinstance(exc, requests.Timeout):
+        return "tidsavbrudd (siden svarte ikke)"
+    if isinstance(exc, requests.ConnectionError):
+        return "fikk ikke kontakt med siden"
+    text = squash(str(exc)) or type(exc).__name__
+    if not isinstance(exc, (SourceError, requests.RequestException)):
+        text = f"{type(exc).__name__}: {text}"
+    return text[:200]
+
+
+def dashboard_url(cfg):
+    if cfg.get("dashboard_url"):
+        return cfg["dashboard_url"]
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if "/" in repo:
+        owner, name = repo.split("/", 1)
+        return f"https://{owner.lower()}.github.io/{name}/"
+    return DEFAULT_DASHBOARD
+
+
+# --------------------------------------------------------------------------
+# notification channels
+# --------------------------------------------------------------------------
 
 def get_topic(cfg):
     topic = os.environ.get("NTFY_TOPIC") or cfg.get("ntfy_topic", "")
@@ -104,6 +193,39 @@ def smtp_conf(cfg):
         "user": os.environ.get("SMTP_USER") or smtp.get("user", ""),
         "password": os.environ.get("SMTP_PASS") or smtp.get("pass", ""),
     }
+
+
+def telegram_conf(cfg):
+    tg = cfg.get("telegram", {})
+    token = os.environ.get("TELEGRAM_BOT_TOKEN") or tg.get("bot_token", "")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID") or tg.get("chat_id", "")
+    return (token, chat_id) if token and chat_id else None
+
+
+def issue_conf():
+    """(token, 'owner/repo') when running somewhere that can open GitHub issues.
+    In GitHub Actions both come for free, so email works with zero secrets:
+    GitHub mails the repo owner about every new issue."""
+    token = os.environ.get("GITHUB_TOKEN", "")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    return (token, repo) if token and "/" in repo else None
+
+
+def smtp_ready(cfg):
+    conf = smtp_conf(cfg)
+    return bool(conf["user"] and conf["password"])
+
+
+def email_mode(cfg):
+    """'smtp' if you configured your own mail, else 'issue' when GitHub can
+    mail you, else ''. Never both, so you never get double emails."""
+    if smtp_ready(cfg):
+        return "smtp"
+    return "issue" if issue_conf() else ""
+
+
+def any_channel(cfg):
+    return bool(get_topic(cfg) or email_mode(cfg) or telegram_conf(cfg))
 
 
 def send_email(cfg, title, message, url=""):
@@ -136,31 +258,68 @@ def send_email(cfg, title, message, url=""):
     return True
 
 
-def notify(cfg, title, message, url=""):
-    """Send alerts: ntfy push, SMTP email, Telegram. Env vars override config.
-    In GitHub Actions the workflow additionally opens an issue per run with new
-    hits (see radar_check.yml) — GitHub emails the repo owner about new issues,
-    so email alerts work there with zero secrets configured."""
+def create_issue(title, body, close=False):
+    """Open a GitHub issue in this repo (GitHub then emails the owner).
+    close=True closes it straight away: the mail still goes out, but
+    housekeeping notices do not pile up as open issues.
+    Returns True when the issue was created. Never raises."""
+    conf = issue_conf()
+    if not conf:
+        return False
+    token, repo = conf
+    owner = repo.split("/", 1)[0]
+    api = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        resp = requests.post(
+            f"{api}/repos/{repo}/issues",
+            headers=headers,
+            json={"title": title[:240], "body": f"@{owner}\n{body}"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        print(f"::error::GitHub issue failed: {short_error(exc)}")
+        return False
+    if close:
+        try:
+            requests.patch(
+                f"{api}/repos/{repo}/issues/{resp.json()['number']}",
+                headers=headers,
+                json={"state": "closed"},
+                timeout=30,
+            ).raise_for_status()
+        except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+            print(f"could not close the issue (the mail was still sent): {exc}")
+    return True
+
+
+def send_direct(cfg, title, message, url=""):
+    """Push the alert through every channel you configured yourself:
+    ntfy push, SMTP email, Telegram. Env vars override config.
+    Returns True when at least one of them delivered. Never raises."""
     sent = False
 
     topic = get_topic(cfg)
     if topic:
         try:
-            requests.post(
-                "https://ntfy.sh",
-                json={
-                    "topic": topic,
-                    "title": title,
-                    "message": message,
-                    "click": url,
-                    "priority": 5,
-                    "tags": ["rotating_light"],
-                },
-                timeout=20,
-            ).raise_for_status()
+            payload = {
+                "topic": topic,
+                "title": title,
+                "message": message,
+                "priority": 5,
+                "tags": ["rotating_light"],
+            }
+            if url:
+                payload["click"] = url
+            requests.post("https://ntfy.sh", json=payload, timeout=20).raise_for_status()
             sent = True
         except requests.RequestException as exc:
-            print(f"ntfy failed: {exc}")
+            print(f"ntfy failed: {short_error(exc)}")
 
     try:
         if send_email(cfg, title, message, url):
@@ -168,75 +327,74 @@ def notify(cfg, title, message, url=""):
     except (smtplib.SMTPException, OSError) as exc:
         print(f"email failed: {exc}")
 
-    tg = cfg.get("telegram", {})
-    token = os.environ.get("TELEGRAM_BOT_TOKEN") or tg.get("bot_token", "")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID") or tg.get("chat_id", "")
-    if token and chat_id:
+    tg = telegram_conf(cfg)
+    if tg:
         try:
             requests.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": chat_id, "text": f"{title}\n\n{message}\n{url}"},
+                f"https://api.telegram.org/bot{tg[0]}/sendMessage",
+                json={"chat_id": tg[1], "text": f"{title}\n\n{message}\n{url}"},
                 timeout=20,
             ).raise_for_status()
             sent = True
         except requests.RequestException as exc:
-            print(f"telegram failed: {exc}")
+            print(f"telegram failed: {short_error(exc)}")
 
-    if not sent and os.environ.get("GITHUB_ACTIONS") != "true":
-        print("WARNING: no notification channel configured. Set smtp/ntfy_topic in config.json.")
     print(f"[ALERT] {title} | {message} | {url}")
+    return sent
 
 
-def webcruiter_deadline(ad):
-    """'frist 07.08' from ApplicationDeadline; Webcruiter uses year 1 for no deadline."""
-    try:
-        dt = datetime.fromisoformat(ad.get("ApplicationDeadline") or "")
-    except ValueError:
-        return "frist ukjent"
-    if dt.year <= 1970:
-        return "frist: snarest"
-    return f"frist {dt.strftime('%d.%m')}"
+def send_notice(cfg, title, message, url=""):
+    """Housekeeping mail (site unreachable, site back, weekly 'alive', test):
+    every direct channel, plus a GitHub issue that is closed straight away
+    when that is the email route. Returns True when something delivered."""
+    sent = send_direct(cfg, title, message, url)
+    if email_mode(cfg) == "issue":
+        body = message + (f"\n\n{url}" if url else "")
+        if create_issue(title, body, close=True):
+            sent = True
+    return sent
 
 
-def check_webcruiter(target, seen_keys):
-    """Query the Webcruiter candidate API for every advert in a company silo.
-    Covers listings the career page only renders with JavaScript."""
-    name = target["name"]
-    keywords = [k.lower() for k in target["keywords"]]
-
-    resp = fetch(
-        "POST",
-        f"https://candidate.webcruiter.com/api/odvert/companysearch/{target['silo']}",
-        headers={**HEADERS, "Accept": "application/json"},
-        json={"skip": 0, "take": 200},
-        timeout=30,
-    )
-
-    hits = []
-    OPEN_MATCHES[name] = []
-    ads = resp.json().get("Data", [])
-    LISTING_COUNTS[name] = len(ads)
-    for ad in ads:
-        heading = (ad.get("Heading") or "").strip()
-        haystack = f"{heading} {ad.get('JobCategory') or ''}".lower()
-        if not any(k in haystack for k in keywords):
-            continue
-        link = ad.get("OpenAdvertUrl") or target["url"]
-        key = f"{name}|webcruiter|{ad.get('Id') or link}"
-        place = (ad.get("Workplace") or "").strip()
-        parts = [heading, f"({place})" if place else "", "·", webcruiter_deadline(ad)]
-        label = " ".join(p for p in parts if p)
-        OPEN_MATCHES.setdefault(name, []).append({"text": label, "link": link})
-        if key not in seen_keys:
-            hits.append((label, link, key))
-    return hits
+def md_link(text, link):
+    safe = link.replace("(", "%28").replace(")", "%29").replace(" ", "%20")
+    return f"[{text}]({safe})"
 
 
-LISTING_COUNTS = {}  # target name -> live listings seen this run (for the weekly alive mail)
-OPEN_MATCHES = {}    # target name -> wanted postings live right now (lights the dashboard card)
+def send_hits_issue(entries, close=False):
+    """One issue (= one email) per run, however many hits it had."""
+    title = entries[0]["text"]
+    if len(entries) > 1:
+        title = f"{title} (+{len(entries) - 1} til)"
+    lines = [f"- {md_link(e['text'], e['link'])} — {e['target']}" for e in entries]
+    stamp = now_utc().strftime("%d.%m.%Y %H:%M")
+    body = "\n".join(lines) + f"\n\nRadaren fant dette {stamp} UTC. Triager på tavla, utrykning hvis HØY."
+    return create_issue(f"🚨 MULIG TREFF: {title}", body, close=close)
+
+
+def send_hits_direct(cfg, name, hits, target_url):
+    """Per-hit pings on the direct channels (one summary above the digest
+    threshold). Returns True only when every ping was delivered."""
+    if len(hits) > DIGEST_THRESHOLD:
+        preview = "\n".join(f"- {h.text}" for h in hits[:DIGEST_THRESHOLD])
+        return send_direct(
+            cfg,
+            f"POSSIBLE MATCH: {name} ({len(hits)} treff)",
+            f"{preview}\n… og {len(hits) - DIGEST_THRESHOLD} til. Åpne siden.",
+            target_url,
+        )
+    delivered = True
+    for hit in hits:
+        if not send_direct(cfg, f"POSSIBLE MATCH: {name}", hit.text, hit.link):
+            delivered = False
+    return delivered
+
+
+# --------------------------------------------------------------------------
+# sources
+# --------------------------------------------------------------------------
 
 DEADLINE_RES = [
-    re.compile(r"s\u00f8knadsfrist:?\s*([^|]*?\d{4})", re.I),   # Jobbnorge: "Søknadsfrist: Fredag 6. november 2026"
+    re.compile(r"søknadsfrist:?\s*([^|]*?\d{4})", re.I),   # Jobbnorge: "Søknadsfrist: Fredag 6. november 2026"
     re.compile(r"\b(\d{2}\.\d{2}\.\d{4})\b"),                    # ReachMee row: "... Gardermoen 18.11.2026"
 ]
 
@@ -260,8 +418,8 @@ def fetch_detail_text(link):
     return text if len(text) > 300 else None
 
 
-def check_target(target, seen_keys):
-    """Fetch one career page, return list of (text, link, key) for new keyword hits.
+def check_html(target, seen_keys, log: Log = _quiet):
+    """Fetch one HTML career page and filter its job links.
 
     Optional per-target fields in config.json (all backwards compatible):
       href_must_contain   link URL must contain one of these (location filter via URL)
@@ -279,33 +437,37 @@ def check_target(target, seen_keys):
     """
     name = target["name"]
     url = target["url"]
-    keywords = [k.lower() for k in target["keywords"]]
-    exclude = [k.lower() for k in target.get("exclude_keywords", [])]
-    href_must = [s.lower() for s in target.get("href_must_contain", [])]
+    keywords = lower_list(target, "keywords")
+    exclude = lower_list(target, "exclude_keywords")
+    href_must = lower_list(target, "href_must_contain")
     use_fallback = target.get("page_text_fallback", True)
     sanity_href = target.get("sanity_href", "").lower()
-    location_must = [s.lower() for s in target.get("location_must_contain", [])]
+    location_must = lower_list(target, "location_must_contain")
     check_detail = target.get("check_detail", False)
     use_context = target.get("context_parent", False)
-    detail_trigger = [k.lower() for k in target.get("detail_trigger", [])]
+    detail_trigger = lower_list(target, "detail_trigger")
 
     resp = fetch("GET", url, headers=HEADERS, timeout=30)
     soup = BeautifulSoup(resp.text, "html.parser")
     anchors = soup.find_all("a", href=True)
+    page_title = squash(soup.title.get_text()) if soup.title else "-"
+    log(f"HTTP {resp.status_code}, {len(resp.text)} bytes, title: {page_title}")
 
     if sanity_href and not any(sanity_href in a["href"].lower() for a in anchors):
-        raise requests.RequestException(
-            f"no links containing '{sanity_href}', page layout probably changed"
-        )
+        raise SourceError(f"no links containing '{sanity_href}', page layout probably changed")
 
     hits = []
+    open_matches = []
     run_keys = set()
     any_link_matched = False
     listing_links = set()
-    OPEN_MATCHES[name] = []
 
-    for a in anchors:
-        text = " ".join(a.get_text(" ", strip=True).split())
+    for index, a in enumerate(anchors):
+        text = squash(a.get_text(" ", strip=True))
+        row = a.find_parent(["li", "article", "tr"]) or a.parent
+        row_text = squash(row.get_text(" ", strip=True)) if row is not None else ""
+        if index < 150:
+            log(f"  LINK {a['href'][:110]} | {text[:80]} | ctx: {row_text[:160]}")
         if len(text) < 4:
             continue
         link = urljoin(url, a["href"])
@@ -316,8 +478,7 @@ def check_target(target, seen_keys):
         if use_context:
             # Job boards print location, role category and deadline in the same
             # row as the link (ISS: "Renholdsmedarbeider Stjørdal"). Match on that.
-            row = a.find_parent(["li", "article", "tr"]) or a.parent
-            raw_row = " ".join(row.get_text(" ", strip=True).split()) or text
+            raw_row = row_text or text
             low = raw_row.lower()
         if href_must and not any(s in link.lower() for s in href_must):
             continue
@@ -335,7 +496,7 @@ def check_target(target, seen_keys):
             # so the role is only stated inside the ad. Open it and look there.
             body = fetch_detail_text(link)
             if body is None:
-                text += "  [kunne ikke lese annonsen, sjekk rollen selv]"
+                text += UNREADABLE_TAG
             elif not any(k in body for k in keywords):
                 continue
         else:
@@ -344,11 +505,9 @@ def check_target(target, seen_keys):
         run_keys.add(key)
         deadline = find_deadline(raw_row)
         label = f"{text} · frist {deadline}" if deadline else text
-        OPEN_MATCHES[name].append({"text": label, "link": link})
+        open_matches.append({"text": label, "link": link})
         if key not in seen_keys:
-            hits.append((label, link, key))
-
-    LISTING_COUNTS[name] = len(listing_links)
+            hits.append(Hit(label, link, key))
 
     # Fallback: keyword appears in page text but not in any link
     # (covers pages that render listings without anchor titles).
@@ -358,19 +517,197 @@ def check_target(target, seen_keys):
             if k in page_text:
                 key = f"{name}|pagetext|{k}"
                 if key not in seen_keys:
-                    hits.append(
-                        (f"Keyword '{k}' appeared on the page (no direct link found). Open and check.", url, key)
-                    )
+                    hits.append(Hit(
+                        f"Keyword '{k}' appeared on the page (no direct link found). Open and check.",
+                        url, key,
+                    ))
 
-    return hits
+    # without a sanity_href there is no way to tell job links from menu links
+    listings = len(listing_links) if sanity_href else None
+    return CheckResult(hits, open_matches, listings)
 
+
+def webcruiter_deadline(ad):
+    """'frist 07.08' from ApplicationDeadline; Webcruiter uses year 1 for no deadline."""
+    try:
+        dt = datetime.fromisoformat(ad.get("ApplicationDeadline") or "")
+    except (ValueError, TypeError):
+        return "frist ukjent"
+    if dt.year <= 1970:
+        return "frist: snarest"
+    return f"frist {dt.strftime('%d.%m')}"
+
+
+def check_webcruiter(target, seen_keys, log: Log = _quiet):
+    """Query the Webcruiter candidate API for every advert in a company silo.
+    Covers listings the career page only renders with JavaScript."""
+    name = target["name"]
+    keywords = lower_list(target, "keywords")
+
+    resp = fetch(
+        "POST",
+        f"https://candidate.webcruiter.com/api/odvert/companysearch/{target['silo']}",
+        headers={**HEADERS, "Accept": "application/json"},
+        json={"skip": 0, "take": 200},
+        timeout=30,
+    )
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise SourceError("Webcruiter did not answer with JSON") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("Data", []), list):
+        raise SourceError("Webcruiter answer has no 'Data' list, API probably changed")
+    ads = [ad for ad in data.get("Data", []) if isinstance(ad, dict)]
+    log(f"HTTP {resp.status_code}, {len(ads)} adverts")
+
+    hits = []
+    open_matches = []
+    for ad in ads:
+        heading = (ad.get("Heading") or "").strip()
+        log(f"  AD {heading} | {ad.get('JobCategory')} | {ad.get('Workplace')} | {webcruiter_deadline(ad)}")
+        haystack = f"{heading} {ad.get('JobCategory') or ''}".lower()
+        if not any(k in haystack for k in keywords):
+            continue
+        link = ad.get("OpenAdvertUrl") or target["url"]
+        key = f"{name}|webcruiter|{ad.get('Id') or link}"
+        place = (ad.get("Workplace") or "").strip()
+        parts = [heading, f"({place})" if place else "", "·", webcruiter_deadline(ad)]
+        label = " ".join(p for p in parts if p)
+        open_matches.append({"text": label, "link": link})
+        if key not in seen_keys:
+            hits.append(Hit(label, link, key))
+    return CheckResult(hits, open_matches, len(ads))
+
+
+SF_JOB_RE = re.compile(r"<Job>(.*?)</Job>", re.S)
+SF_DESC_RE = re.compile(r"<Job-Description>.*?</Job-Description>", re.S)
+SF_CDATA_RE = re.compile(r"<!\[CDATA\[(.*)\]\]>", re.S)
+
+
+def sf_field(block, tag):
+    m = re.search(rf"<{tag}>(.*?)</{tag}>", block, re.S)
+    if not m:
+        return ""
+    value = m.group(1).strip()
+    cdata = SF_CDATA_RE.fullmatch(value)
+    return (cdata.group(1) if cdata else value).strip()
+
+
+def parse_successfactors(feed_text):
+    """Jobs from a SuccessFactors 'job_listing_summary' XML feed.
+    Read with regexes on purpose: the feed is not well-formed XML
+    (it contains tags with empty names), so a real XML parser rejects it."""
+    if "<Job-Listing" not in feed_text:
+        raise SourceError("no <Job-Listing> in the feed, feed address or format probably changed")
+    jobs = []
+    for block in SF_JOB_RE.findall(feed_text):
+        title = squash(html.unescape(re.sub(r"<[^>]+>", " ", sf_field(block, "JobTitle"))))
+        if not title:
+            continue
+        rest = SF_DESC_RE.sub("", block)
+        categories = [
+            squash(html.unescape(SF_CDATA_RE.sub(r"\1", v)))
+            for v in re.findall(r"<value>(.*?)</value>", rest, re.S)
+        ]
+        body = BeautifulSoup(sf_field(block, "Job-Description"), "html.parser").get_text(" ", strip=True)
+        jobs.append({
+            "id": sf_field(rest, "ReqId"),
+            "title": title,
+            "category": " ".join(c for c in categories if c),
+            "body": squash(body).lower(),
+        })
+    return jobs
+
+
+def check_successfactors(target, seen_keys, log: Log = _quiet):
+    """Read the public SuccessFactors job feed (every open job in the company).
+
+    Fields in config.json:
+      feed       feed address (…career?company=X&career_ns=job_listing_summary&resultType=XML)
+      job_link   link to one job, "{id}" is replaced by the requisition id
+      keywords / exclude_keywords / check_detail / detail_trigger
+                 as for HTML targets, matched on title + field of work; the ad
+                 body comes with the feed, so check_detail costs no extra request
+      location_must_contain  one of these must be in the title or the ad body
+      location_elsewhere     the feed has no location field. A role match that
+                 never mentions your location still alerts, flagged, unless its
+                 TITLE names one of these other places
+    """
+    name = target["name"]
+    keywords = lower_list(target, "keywords")
+    exclude = lower_list(target, "exclude_keywords")
+    location_must = lower_list(target, "location_must_contain")
+    elsewhere = lower_list(target, "location_elsewhere")
+    check_detail = target.get("check_detail", False)
+    detail_trigger = lower_list(target, "detail_trigger")
+
+    resp = fetch("GET", target["feed"], headers=HEADERS, timeout=40)
+    # the feed is served without a charset; it is UTF-8
+    jobs = parse_successfactors(resp.content.decode("utf-8", errors="replace"))
+    log(f"HTTP {resp.status_code}, {len(resp.content)} bytes, {len(jobs)} jobs in feed")
+
+    hits = []
+    open_matches = []
+    run_keys = set()
+    for job in jobs:
+        title = job["title"]
+        log(f"  JOB {job['id'] or '-'} | {title} | {job['category']}")
+        title_low = title.lower()
+        low = f"{title} {job['category']}".lower()
+        body = job["body"]
+        label = title
+        if exclude and any(e in low for e in exclude):
+            continue
+        if any(k in low for k in keywords):
+            pass  # role named in the title itself
+        elif check_detail and (not detail_trigger or any(k in low for k in detail_trigger)):
+            if not body:
+                label += UNREADABLE_TAG
+            elif not any(k in body for k in keywords):
+                continue
+        else:
+            continue
+        if location_must and not any(s in low or s in body for s in location_must):
+            if any(s in title_low for s in elsewhere):
+                continue  # the title itself says the job is somewhere else
+            label += LOCATION_TAG
+        ident = job["id"] or title_low
+        key = f"{name}|successfactors|{ident}"
+        if key in run_keys:
+            continue
+        run_keys.add(key)
+        link = target["job_link"].replace("{id}", job["id"]) if job["id"] and target.get("job_link") else target["url"]
+        open_matches.append({"text": label, "link": link})
+        if key not in seen_keys:
+            hits.append(Hit(label, link, key))
+    return CheckResult(hits, open_matches, len(jobs))
+
+
+SOURCES = {
+    "webcruiter": check_webcruiter,
+    "successfactors": check_successfactors,
+}
+
+
+def check(target, seen_keys, log: Log = _quiet):
+    kind = target.get("type") or "html"
+    if kind == "html":
+        return check_html(target, seen_keys, log)
+    if kind not in SOURCES:
+        raise SourceError(f"unknown target type '{kind}' in config.json")
+    return SOURCES[kind](target, seen_keys, log)
+
+
+# --------------------------------------------------------------------------
+# weekly "radar alive" mail
+# --------------------------------------------------------------------------
 
 def weekly_heartbeat(cfg, run_report, sent_week, last_counts, force=False):
     """Once a week (first run on or after Monday morning) send a 'radar is alive'
     summary with live listing counts per company. A count that drops to 0 or
     halves since last week is flagged: that is what a quietly broken parser
     looks like. Returns the updated (sent_week, last_counts)."""
-    now = datetime.now(timezone.utc)
+    now = now_utc()
     iso = now.isocalendar()
     week = f"{iso[0]}-W{iso[1]:02d}"
     # first run on or after Monday 06 UTC each week: if GitHub skips Monday,
@@ -382,7 +719,8 @@ def weekly_heartbeat(cfg, run_report, sent_week, last_counts, force=False):
     for t in run_report:
         n = t.get("listings")
         prev = last_counts.get(t["name"])
-        counts[t["name"]] = n
+        # a failed check has no count; keep last week's so the trend survives
+        counts[t["name"]] = n if t["ok"] else prev
         if not t["ok"]:
             state_txt = f"FEIL ({t['consecutive_failures']} på rad)"
             warnings.append(f"{t['name']}: klarer ikke lese siden")
@@ -392,7 +730,7 @@ def weekly_heartbeat(cfg, run_report, sent_week, last_counts, force=False):
                 warnings.append(f"{t['name']}: 0 annonser. Åpne siden selv og sjekk")
             elif prev and n is not None and n < prev / 2:
                 warnings.append(f"{t['name']}: falt fra {prev} til {n} annonser siden forrige uke")
-        trend = f" (forrige uke {prev})" if prev is not None and prev != n else ""
+        trend = f" (forrige uke {prev})" if t["ok"] and prev is not None and prev != n else ""
         lines.append(f"- {t['name']}: {state_txt}{trend}")
 
     status = "SJEKK DETTE" if warnings else "alt ser normalt ut"
@@ -401,157 +739,206 @@ def weekly_heartbeat(cfg, run_report, sent_week, last_counts, force=False):
     if warnings:
         body += "\n\n⚠️ " + "\n⚠️ ".join(warnings)
     body += "\n\nIngen handling trengs hvis alt ser normalt ut."
-    notify(cfg, title, body, "https://facha003.github.io/job-radar/")
-    save_json(BASE / "heartbeat.json", {"title": title, "body": body})
+    delivered = send_notice(cfg, title, body, dashboard_url(cfg))
+    if not delivered and any_channel(cfg):
+        print("::warning::Heartbeat was not delivered, trying again next run")
+        return sent_week, last_counts
     print(f"Heartbeat sent: {title}")
     return week, counts
 
 
-def main():
-    cfg = load_json(CONFIG_PATH, None)
-    if cfg is None:
-        sys.exit("config.json missing. Create it next to this script first.")
+# --------------------------------------------------------------------------
+# commands
+# --------------------------------------------------------------------------
 
+def run_test(cfg):
+    """Send one fake alert through the real paths. Touches no state."""
+    link = "https://careers.sasgroup.net/search/?q=&locationsearch=Gardermoen"
+    sent = send_direct(
+        cfg,
+        "Jobbradar: test",
+        "Varsling virker. Ekte varsler ser slik ut, med tittel, sted og frist.",
+        link,
+    )
+    if email_mode(cfg) == "issue":
+        entry = {
+            "time": now_iso(),
+            "target": "TEST",
+            "text": "TEST · Servicemedarbeider (Gardermoen) · varslingen virker",
+            "link": link,
+        }
+        # same code path as a real hit; closed at once so tests don't pile up
+        if send_hits_issue([entry], close=True):
+            sent = True
+    if not sent:
+        print("::error::Test alert was NOT delivered on any channel.")
+        if not any_channel(cfg):
+            print("No notification channel is configured here. In GitHub Actions email works "
+                  "out of the box; locally set smtp or ntfy_topic in config.json.")
+        return 1
+    print("Test alert delivered.")
+    return 0
+
+
+def run_dry(cfg, only="", dump=True):
+    """Read every source and print what WOULD alert (ignoring seen.json).
+    Sends nothing and writes nothing. Returns 1 if any source failed."""
+    failed = 0
+    for target in cfg.get("targets", []):
+        if only and only not in target["name"].lower():
+            continue
+        print(f"\n===== {target['name']} =====")
+        try:
+            result = check(target, set(), print if dump else _quiet)
+        except Exception as exc:  # noqa: BLE001 - report every kind of failure
+            failed += 1
+            print(f"  ERROR: {short_error(exc)}")
+            continue
+        for hit in result.hits:
+            print(f"  WOULD ALERT: {hit.text} -> {hit.link}")
+        print(f"  {len(result.hits)} would-alert hit(s), listings counted: {result.listings}")
+    return 1 if failed else 0
+
+
+def run_radar(cfg, force_heartbeat=False):
     state = load_json(STATE_PATH, {})
     seen_keys = set(state.get("seen", []))
     fail_counts = state.get("fail", {})
     alerts = state.get("alerts", [])
-
-    if "--test" in sys.argv:
-        title = "TEST · Servicemedarbeider (Gardermoen) · varslingen virker"
-        link = "https://careers.sasgroup.net/search/?q=&locationsearch=Gardermoen"
-        notify(
-            cfg,
-            "Jobbradar: test",
-            "Varsling virker. Ekte varsler ser slik ut, med tittel, sted og frist.",
-            link,
-        )
-        # Same file the workflow turns into an issue, so the test goes through
-        # the real email path. seen.json and status.json are left untouched.
-        save_json(BASE / "run_alerts.json", [
-            {"time": now_iso(), "target": "TEST", "text": title, "link": link}
-        ])
-        return
-
-    if "--dry-run" in sys.argv:
-        # Scrape every target, print what WOULD alert (ignoring seen.json),
-        # plus raw job links, so a new target can be checked from GitHub's
-        # servers. Sends nothing and writes no state.
-        save_json(BASE / "run_alerts.json", [])
-        only = os.environ.get("DRY_RUN_TARGET", "").lower()
-        for target in cfg.get("targets", []):
-            if only and only not in target["name"].lower():
-                continue
-            print(f"\n===== {target['name']} =====")
-            try:
-                if target.get("type") == "webcruiter":
-                    resp = fetch("POST", f"https://candidate.webcruiter.com/api/odvert/companysearch/{target['silo']}",
-                                 headers={**HEADERS, "Accept": "application/json"}, json={"skip": 0, "take": 200}, timeout=30)
-                    ads = resp.json().get("Data", [])
-                    print(f"HTTP {resp.status_code}, {len(ads)} adverts")
-                    for ad in ads:
-                        print(f"  AD {ad.get('Heading')} | {ad.get('JobCategory')} | {ad.get('Workplace')} | {webcruiter_deadline(ad)}")
-                else:
-                    resp = fetch("GET", target["url"], headers=HEADERS, timeout=30)
-                    soup = BeautifulSoup(resp.text, "html.parser")
-                    print(f"HTTP {resp.status_code}, {len(resp.text)} bytes, title: {soup.title.string if soup.title else '-'}")
-                    for a in soup.find_all("a", href=True)[:150]:
-                        t = " ".join(a.get_text(" ", strip=True).split())
-                        par = a.find_parent(["li", "article", "tr"]) or a.parent
-                        ctx = " ".join(par.get_text(" ", strip=True).split())[:160]
-                        print(f"  LINK {a['href'][:110]} | {t[:80]} | ctx: {ctx}")
-                hits = (check_webcruiter if target.get("type") == "webcruiter" else check_target)(target, set())
-                for text, link, _ in hits:
-                    print(f"  WOULD ALERT: {text} -> {link}")
-                print(f"  {len(hits)} would-alert hit(s), listings counted: {LISTING_COUNTS.get(target['name'])}")
-            except Exception as exc:
-                print(f"  ERROR: {exc}")
-        return
-
     prev_open = {t["name"]: t.get("open", []) for t in load_json(STATUS_PATH, {}).get("targets", [])}
-    run_report = []
-    run_alerts = []  # only this run's hits; the workflow turns them into a GitHub issue
+
+    channels_exist = any_channel(cfg)
+    if not channels_exist:
+        print("WARNING: no notification channel configured. Hits are only printed here. "
+              "Set smtp/ntfy_topic in config.json, or run in GitHub Actions.")
+
+    checked = []   # (target, result or None, error text)
+    pending = []   # (target name, Hit, delivered on a direct channel?)
 
     for target in cfg.get("targets", []):
-        name = target["name"]
+        name = target.get("name", "?")
+        before = fail_counts.get(name, 0)
         try:
-            if target.get("type") == "webcruiter":
-                hits = check_webcruiter(target, seen_keys)
-            else:
-                hits = check_target(target, seen_keys)
-        except requests.RequestException as exc:
-            fail_counts[name] = fail_counts.get(name, 0) + 1
-            print(f"[{name}] fetch failed ({fail_counts[name]} in a row): {exc}")
+            result = check(target, seen_keys)
+        except Exception as exc:  # noqa: BLE001 - one broken target must never stop the others
+            error = short_error(exc)
+            fail_counts[name] = before + 1
+            print(f"[{name}] check failed ({fail_counts[name]} in a row): {error}")
             if fail_counts[name] == FAIL_WARN_THRESHOLD:
-                notify(
+                send_notice(
                     cfg,
-                    f"Job Radar: {name} unreachable",
-                    f"Failed {FAIL_WARN_THRESHOLD} checks in a row. Site moved or blocked. Check config.json.",
-                    target["url"],
+                    f"Jobbradar: {name} svarer ikke",
+                    f"{FAIL_WARN_THRESHOLD} sjekker på rad har feilet. Siste feil: {error}.\n"
+                    "Siden kan være flyttet, nede eller blokkere radaren. "
+                    "Sjekk siden selv til dette er løst, og se config.json.",
+                    target.get("url", ""),
                 )
-            run_report.append({
-                "name": name,
-                "url": target["url"],
-                "ok": False,
-                "consecutive_failures": fail_counts[name],
-                "new_hits": 0,
-                "total_seen": sum(1 for k in seen_keys if k.startswith(name + "|")),
-                "open": prev_open.get(name, []),
-            })
+            checked.append((target, None, error))
             continue
 
         fail_counts[name] = 0
-        if len(hits) > DIGEST_THRESHOLD:
-            preview = "\n".join(f"- {text}" for text, _, _ in hits[:DIGEST_THRESHOLD])
-            notify(
+        if before >= FAIL_WARN_THRESHOLD:
+            send_notice(
                 cfg,
-                f"POSSIBLE MATCH: {name} ({len(hits)} treff)",
-                f"{preview}\n… og {len(hits) - DIGEST_THRESHOLD} til. Åpne siden.",
-                target["url"],
+                f"Jobbradar: {name} virker igjen",
+                f"Radaren leser siden igjen etter {before} feilede sjekker på rad.",
+                target.get("url", ""),
             )
+        direct_ok = send_hits_direct(cfg, name, result.hits, target["url"]) if result.hits else False
+        pending.extend((name, hit, direct_ok) for hit in result.hits)
+        checked.append((target, result, ""))
+        print(f"[{name}] checked OK, {len(result.hits)} new hit(s)")
+
+    # one GitHub issue (= one email) for the whole run
+    issue_ok = False
+    if pending and email_mode(cfg) == "issue":
+        stamp = now_iso()
+        issue_ok = send_hits_issue([
+            {"time": stamp, "target": name, "text": hit.text, "link": hit.link}
+            for name, hit, _ in pending
+        ])
+
+    # A hit only counts as seen once it actually reached you. If every channel
+    # failed, it stays unseen and alerts again on the next run.
+    undelivered = 0
+    for name, hit, direct_ok in pending:
+        if direct_ok or issue_ok or not channels_exist:
+            seen_keys.add(hit.key)
+            alerts.insert(0, {"time": now_iso(), "target": name, "text": hit.text, "link": hit.link})
         else:
-            for text, link, _ in hits:
-                notify(cfg, f"POSSIBLE MATCH: {name}", text, link)
-        for text, link, key in hits:
-            seen_keys.add(key)
-            entry = {"time": now_iso(), "target": name, "text": text, "link": link}
-            alerts.insert(0, entry)
-            run_alerts.append(entry)
-
-        run_report.append({
-            "name": name,
-            "url": target["url"],
-            "ok": True,
-            "consecutive_failures": 0,
-            "new_hits": len(hits),
-            "total_seen": sum(1 for k in seen_keys if k.startswith(name + "|")),
-            "listings": LISTING_COUNTS.get(name),
-            "open": OPEN_MATCHES.get(name, []),
-        })
-        print(f"[{name}] checked OK, {len(hits)} new hit(s)")
-
+            undelivered += 1
+    if undelivered:
+        print(f"::error::{undelivered} hit(s) could not be delivered on any channel. "
+              "They are NOT marked as seen and will alert again on the next run.")
     alerts = alerts[:MAX_ALERT_HISTORY]
-    heartbeat_week = state.get("heartbeat_week", "")
-    last_counts = state.get("last_counts", {})
-    heartbeat_week, last_counts = weekly_heartbeat(cfg, run_report, heartbeat_week, last_counts,
-                                                     force="--heartbeat" in sys.argv)
-    smtp = smtp_conf(cfg)
-    channels = {
-        # in Actions the issue->email path is always on, even without secrets
-        "email": bool(smtp["user"] and smtp["password"]) or os.environ.get("GITHUB_ACTIONS") == "true",
-        "push": bool(get_topic(cfg)),
-    }
-    save_json(STATE_PATH, {"seen": sorted(seen_keys), "fail": fail_counts, "alerts": alerts,
-                           "heartbeat_week": heartbeat_week, "last_counts": last_counts})
-    save_json(BASE / "run_alerts.json", run_alerts)
+
+    run_report = []
+    for target, result, error in checked:
+        name = target.get("name", "?")
+        entry = {
+            "name": name,
+            "url": target.get("url", ""),
+            "ok": result is not None,
+            "consecutive_failures": fail_counts.get(name, 0),
+            "new_hits": len(result.hits) if result else 0,
+            "total_seen": sum(1 for k in seen_keys if k.startswith(name + "|")),
+        }
+        if result is not None:
+            entry["listings"] = result.listings
+            entry["open"] = result.open
+        else:
+            entry["error"] = error
+            entry["open"] = prev_open.get(name, [])  # keep showing the last known state
+        run_report.append(entry)
+
+    heartbeat_week, last_counts = weekly_heartbeat(
+        cfg, run_report, state.get("heartbeat_week", ""), state.get("last_counts", {}),
+        force=force_heartbeat,
+    )
+    save_json(STATE_PATH, {
+        "seen": sorted(seen_keys),
+        "fail": fail_counts,
+        "alerts": alerts,
+        "heartbeat_week": heartbeat_week,
+        "last_counts": last_counts,
+    })
     save_json(STATUS_PATH, {
         "generated": now_iso(),
-        "channels": channels,
+        "channels": {"email": bool(email_mode(cfg)), "push": bool(get_topic(cfg))},
         "targets": run_report,
         "recent_alerts": alerts,
     })
-    print(f"Done. {len(run_alerts)} new alert(s) this run. Status written to docs/status.json")
+    delivered = len(pending) - undelivered
+    print(f"Done. {delivered} new alert(s) this run. Status written to docs/status.json")
+    return 0
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Job Radar: watch career pages, alert on wanted roles.")
+    parser.add_argument("--test", action="store_true", help="send a test alert through the real channels, touch no state")
+    parser.add_argument("--dry-run", action="store_true", help="read every source, print every listing and what would alert; send and save nothing")
+    parser.add_argument("--heartbeat", action="store_true", help="also send the weekly 'radar alive' mail now")
+    parser.add_argument("--write", action="store_true", help="real run outside GitHub Actions: send alerts and save state")
+    args = parser.parse_args(argv)
+
+    cfg = load_json(CONFIG_PATH, None)
+    if cfg is None:
+        sys.exit("config.json missing. Create it next to this script first.")
+
+    if args.test:
+        return run_test(cfg)
+    if args.dry_run:
+        return run_dry(cfg, only=os.environ.get("DRY_RUN_TARGET", "").strip().lower())
+    if args.write or os.environ.get("GITHUB_ACTIONS") == "true":
+        return run_radar(cfg, force_heartbeat=args.heartbeat)
+
+    # Plain local run: look, don't touch. seen.json and docs/status.json belong
+    # to the GitHub runs; rewriting them from a laptop makes the dashboard lie.
+    print("Lokal forhåndsvisning: leser alle kildene, sender ingenting og lagrer ingenting.\n"
+          "Treffene under er alt som er ledig nå, også det du allerede er varslet om.\n"
+          "Ekte kjøring: --write. Se alt kildene svarer: --dry-run.")
+    return run_dry(cfg, dump=False)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
