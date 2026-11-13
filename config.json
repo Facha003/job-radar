@@ -12,6 +12,9 @@
   "targets": [
     {
       "name": "Vy karriere",
+      "id": "vy",
+      "label": "VY · KUNDEVEILEDER",
+      "sub": "OSLO / OSLO S / SKI",
       "type": "webcruiter",
       "silo": 23151000,
       "url": "https://www.vy.no/vygruppen/karriere-i-vy/ledige-stillinger",
@@ -25,6 +28,9 @@
     },
     {
       "name": "ISS portal",
+      "id": "iss",
+      "label": "ISS · ASSISTANSE",
+      "sub": "OSLO LUFTHAVN / OSL",
       "url": "https://iss.attract.reachmee.com/jobs",
       "keywords": [
         "assistanse",
@@ -64,6 +70,9 @@
     },
     {
       "name": "SAS Ground Handling",
+      "id": "sas",
+      "label": "SAS GH · SERVICEMEDARBEIDER",
+      "sub": "INNSJEKK OG GATE / OSL",
       "url": "https://careers.sasgroup.net/search/?q=&locationsearch=Gardermoen",
       "keywords": [
         "servicemedarbeider",
@@ -140,6 +149,9 @@
     },
     {
       "name": "Norwegian (Red Handling)",
+      "id": "norwegian",
+      "label": "NORWEGIAN · RED HANDLING",
+      "sub": "INNSJEKK OG GATE / OSL",
       "type": "successfactors",
       "feed": "https://career2.successfactors.eu/career?company=norwegiana&career_ns=job_listing_summary&resultType=XML",
       "job_link": "https://careers.norwegian.com/job-invite/{id}/",
@@ -247,6 +259,9 @@
     },
     {
       "name": "Widerøe Ground Handling",
+      "id": "wideroe",
+      "label": "WIDERØE GROUND HANDLING",
+      "sub": "INNSJEKK OG GATE / OSL · LUFTHANSA FRA OKT 2026",
       "url": "https://jobbiwideroe.no/karriere-i-wideroe/bakkepersonell/",
       "keywords": [
         "flyekspeditør",

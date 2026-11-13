@@ -16,8 +16,11 @@ job-radar/
   tests/
     test_job_radar.py     (testene, kjøres med pytest)
   docs/
-    index.html            (tavla)
+    index.html            (tavla: selve siden)
+    app.css, app.js       (utseende og oppførsel)
+    manifest.webmanifest, sw.js, icon-*.png   (gjør siden til en app på hjemskjermen)
     status.json           (lages automatisk av skriptet)
+    jobs.json             (lages automatisk: alle ønskede stillinger radaren har sett)
   .github/
     workflows/
       radar_check.yml     (versjon 3, selve radaren)
@@ -31,7 +34,7 @@ job-radar/
 1. **Flytt ntfy topicen til en secret.** Settings, Secrets and variables, Actions, ny secret med navn `NTFY_TOPIC` og topicen din som verdi. La feltet i config.json stå som CHANGE ME. Skriptet foretrekker secreten. Grunnen: gratis GitHub Pages krever at repoet er **public**, og da skal ikke topicen ligge i klartekst.
 2. Gjør repoet public (Settings, General, Danger Zone, Change visibility). Det som ligger igjen er søkeord og jobblenker, ingenting sensitivt.
 3. Legg `job_radar.py`, `config.json`, `requirements.txt` og `.github/workflows/radar_check.yml` i repoet.
-4. Legg `index.html` i `docs/` mappa og push.
+4. Legg hele `docs/` mappa i repoet og push.
 5. Settings, Pages, Source: Deploy from a branch, velg `main` og `/docs`, lagre.
 6. Actions fanen, job radar, Run workflow. Da finnes `status.json` fra første stund.
 7. Adressen blir `https://BRUKERNAVN.github.io/job-radar/`. Første deploy kan ta et par minutter.
@@ -41,7 +44,7 @@ job-radar/
 
 ## Frakoblet modus (privat repo eller null oppsett)
 
-Åpne `index.html` rett i nettleseren, ferdig. Alt virker unntatt sanntidslinjene: triage kalkulatoren, rutinene, brevene med kopiknapp, lenkene og det manuelle laget på tavla. Radarlinja viser FRAKOBLET. Det er ærlig, ikke ødelagt.
+Åpne `index.html` rett i nettleseren. Vinduene og sikkerhetskopien virker, men stillingslista og tavla trenger `status.json` og `jobs.json` fra radaren, så radarlinja viser FRAKOBLET. Det er ærlig, ikke ødelagt.
 
 ---
 
@@ -67,8 +70,12 @@ Mottaker er secret `ALERT_EMAIL` i GitHub (feltet `email` i config.json står to
 ## Verdt å vite
 
 * Forhåndsvisningen inne i Claude lagrer ingenting, sandkassa blokkerer lagring. Lokalt og på Pages lagres status, notater og rutiner i nettleseren.
-* Lagringen er per nettleser. Mobilen og PCen har hver sin tavle. Bruk mobilen som hovedcockpit.
-* Rutinelistene nullstiller seg selv: daglig ved midnatt, ukentlig ved ny uke.
+* Lagringen er per nettleser. Mobilen og PCen har hver sin tavle. Bruk mobilen som hovedcockpit. Søknadsstatus og notater ligger bare der, ingen andre kan se hva du har søkt på.
+* Flytte alt til en annen enhet: SIKKERHETSKOPI nederst på siden. Last ned kopi (eller Vis som tekst), og hent den inn på den andre enheten.
+* LEDIG NÅ viser hver stilling du vil ha med nedtelling til fristen. Sett status (SKAL SØKE, SØKT, INTERVJU ...) så havner den under SØKNADER og blir stående der også etter at utlysningen er lukket.
+* HISTORIKK fylles etter hvert som radaren ser utlysninger komme og gå. Over tid viser den når hver arbeidsgiver pleier å lyse ut.
+* RADAR viser hvor ofte GitHub faktisk har kjørt sjekken det siste døgnet, og den lengste pausen siste uke.
+* Ny arbeidsgiver i config.json dukker opp på tavla av seg selv. Feltene `id`, `label` og `sub` styrer hva som står på kortet. Ikke endre `id` på en arbeidsgiver du har notater på: notatene er lagret under den.
 * ISS portalen er verifisert 10.07.2026: iss.no (no.issworld.com) lenker selv til iss.attract.reachmee.com/jobs, og siden viser alle utlysningene uten JavaScript. VERIFISER merket er derfor fjernet fra tavla. Det eneste som gjenstår å se, er om aviation stillingene på OSL faktisk publiseres der når de kommer.
 * Norwegian leses fra november 2026 fra SAP sin åpne stillingsfeed (`"type": "successfactors"` i config.json), ikke fra careers.norwegian.com. Karrieresiden deres ligger bak Cloudflare, som avviser GitHub sine servere med 403 på alle sider. Feeden har alle Norwegian stillingene, men ikke noe eget stedsfelt. Derfor: står det Oslo, OSL eller Gardermoen i tittel eller annonsetekst, er det treff. Står det et annet sted i tittelen (lista `location_elsewhere`), er det stille. Står det ingen steder, varsler radaren likevel, merket "sted ikke bekreftet, sjekk selv".
 * Kjører du `python job_radar.py` på egen maskin, er det bare en forhåndsvisning. Den sender ingenting og lagrer ingenting. `seen.json` og `docs/status.json` eies av kjøringene på GitHub. Ekte kjøring lokalt krever `--write`.

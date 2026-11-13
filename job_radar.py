@@ -747,17 +747,19 @@ def check(target, seen_keys, log: Log = _quiet):
 # job memory (docs/jobs.json)
 # --------------------------------------------------------------------------
 
-def update_jobs(prev_jobs, checked, now, first_seen_by_link=None):
+def update_jobs(prev_jobs, checked, now, first_seen_hint=None):
     """Fold this run into the list of every wanted posting ever seen.
 
     prev_jobs  the "jobs" list from the last docs/jobs.json
     checked    [(target, CheckResult or None, error)] as built by run_radar
     now        ISO timestamp of this run
+    first_seen_hint  {link or "target|title": time} from earlier alerts, so a
+               posting alerted before jobs.json existed keeps its real date
 
     A posting listed now is open. One that was open and is gone from a source
     that answered is closed. A source that failed says nothing about its
     postings, so they are left exactly as they were."""
-    first_seen_by_link = first_seen_by_link or {}
+    hint = first_seen_hint or {}
     jobs = {j["key"]: dict(j) for j in prev_jobs if isinstance(j, dict) and j.get("key")}
     for target, result, _error in checked:
         if result is None:
@@ -774,7 +776,7 @@ def update_jobs(prev_jobs, checked, now, first_seen_by_link=None):
                 job = jobs[key] = {
                     "key": key,
                     "target": name,
-                    "first_seen": first_seen_by_link.get(item.get("link"), now),
+                    "first_seen": hint.get(item.get("link")) or hint.get(f"{name}|{item.get('title')}") or now,
                     "deadline": None,
                 }
             job.update({
@@ -983,6 +985,9 @@ def run_radar(cfg, force_heartbeat=False):
         name = target.get("name", "?")
         entry = {
             "name": name,
+            "id": target.get("id") or re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-"),
+            "label": target.get("label") or name,
+            "sub": target.get("sub", ""),
             "url": target.get("url", ""),
             "ok": result is not None,
             "consecutive_failures": fail_counts.get(name, 0),
@@ -1009,10 +1014,12 @@ def run_radar(cfg, force_heartbeat=False):
         "last_counts": last_counts,
     })
     stamp = now_iso()
-    jobs = update_jobs(
-        load_json(JOBS_PATH, {}).get("jobs", []), checked, stamp,
-        first_seen_by_link={a["link"]: a["time"] for a in reversed(alerts) if a.get("link") and a.get("time")},
-    )
+    hint = {}
+    for a in reversed(alerts):  # oldest last, so the earliest alert wins
+        if a.get("time"):
+            hint[a.get("link")] = a["time"]
+            hint[f"{a.get('target')}|{a.get('text')}"] = a["time"]
+    jobs = update_jobs(load_json(JOBS_PATH, {}).get("jobs", []), checked, stamp, first_seen_hint=hint)
     save_json(JOBS_PATH, {"generated": stamp, "jobs": jobs})
     save_json(STATUS_PATH, {
         "generated": stamp,

@@ -538,6 +538,7 @@ def test_run_sends_one_issue_for_all_hits_and_saves_state(monkeypatch):
     assert set(state()["seen"]) == {hit("Alpha", 1).key, hit("Alpha", 2).key, hit("Beta", 9).key}
     st = status()
     assert st["channels"] == {"email": True, "push": False}
+    assert [(t["id"], t["label"], t["sub"]) for t in st["targets"]] == [("alpha", "Alpha", ""), ("beta", "Beta", "")]
     assert [(t["name"], t["ok"], t["new_hits"], t["total_seen"], t["listings"]) for t in st["targets"]] == [
         ("Alpha", True, 2, 2, 3), ("Beta", True, 1, 1, 3)]
     assert [a["text"] for a in st["recent_alerts"]] == ["Job 9", "Job 2", "Job 1"]
@@ -831,8 +832,10 @@ def test_jobs_failed_source_never_closes_anything():
 
 def test_jobs_keep_a_known_deadline_and_use_alert_time_as_first_seen():
     jobs = jr.update_jobs([], [(ALPHA, seen_open("Alpha", 1, deadline="2026-12-01"), "")], T2,
-                          first_seen_by_link={"https://Alpha.test/1": T1})
+                          first_seen_hint={"https://Alpha.test/1": T1})
     assert jobs[0]["first_seen"] == T1 and jobs[0]["deadline"] == "2026-12-01"
+    moved = jr.update_jobs([], [(ALPHA, seen_open("Alpha", 1), "")], T2, first_seen_hint={"Alpha|Job 1": T1})
+    assert moved[0]["first_seen"] == T1   # same employer and title, new link
     jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 1), "")], T3)      # deadline unreadable this time
     assert jobs[0]["deadline"] == "2026-12-01"
 
@@ -883,3 +886,9 @@ def test_run_log_is_capped(monkeypatch):
     for _ in range(5):
         jr.run_radar(two_targets())
     assert len(status()["runs"]) == 3
+
+
+def test_real_config_has_stable_ids_for_saved_notes():
+    # the dashboard stores your notes per employer under these ids; changing one orphans the notes
+    assert [t["id"] for t in CONFIG["targets"]][:5] == ["vy", "iss", "sas", "norwegian", "wideroe"]
+    assert all(t.get("label") for t in CONFIG["targets"])

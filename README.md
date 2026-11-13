@@ -22,9 +22,14 @@ GitHub Actions (cron every 10 min, paced to one real check per ~30 min)
        ├─ new matches → one GitHub issue per run → email notification
        ├─ a site that fails 5 checks in a row → warning mail, and a mail when it is back
        ├─ weekly "radar alive" mail with live listing counts per company
-       └─ commits seen.json + docs/status.json
+       ├─ remembers every wanted posting in docs/jobs.json: first seen, deadline, open or closed
+       └─ commits seen.json + docs/status.json + docs/jobs.json
 GitHub Pages
-  └─ docs/index.html reads status.json (departure board style)
+  └─ docs/ (plain HTML, CSS and JavaScript, no build step, departure board style)
+       ├─ every wanted job with a deadline countdown
+       ├─ a private application tracker: status and notes stay in the browser
+       ├─ employer board generated from status.json, history of closed postings
+       └─ installs to the phone's home screen and opens offline
 ```
 
 | Target | Source | What counts as a match |
