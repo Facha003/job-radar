@@ -65,6 +65,7 @@ def clean_env(monkeypatch, tmp_path):
     monkeypatch.setattr(jr, "STATE_PATH", tmp_path / "seen.json")
     monkeypatch.setattr(jr, "STATUS_PATH", tmp_path / "docs" / "status.json")
     monkeypatch.setattr(jr, "JOBS_PATH", tmp_path / "docs" / "jobs.json")
+    monkeypatch.setattr(jr, "CALENDAR_PATH", tmp_path / "docs" / "frister.ics")
     monkeypatch.setattr(jr.time, "sleep", lambda s: None)
 
     def no_network(*a, **k):
@@ -73,6 +74,7 @@ def clean_env(monkeypatch, tmp_path):
     monkeypatch.setattr(jr.requests, "request", no_network)
     monkeypatch.setattr(jr.requests, "post", no_network)
     monkeypatch.setattr(jr.requests, "patch", no_network)
+    monkeypatch.setattr(jr.requests, "get", no_network)
 
 
 # ---------------------------------------------------------------- HTML: SAS
@@ -337,6 +339,14 @@ def test_successfactors_broken_feed_is_a_failure(monkeypatch):
         jr.check(nor(), set())
 
 
+def test_successfactors_maintenance_page_is_named_as_such(monkeypatch):
+    # what SAP really served on 13.11.2026: a redirect to an HTML page, status 200
+    page = "<html><head><title>Maintenance</title></head><body>The SAP SuccessFactors HCM Suite is currently undergoing 2H 2026 Release Upgrade.</body></html>"
+    serve(monkeypatch, {nor()["feed"]: page})
+    with pytest.raises(jr.SourceError, match="planlagt vedlikehold"):
+        jr.check(nor(), set())
+
+
 def test_successfactors_empty_feed_is_valid_but_zero(monkeypatch):
     serve(monkeypatch, {nor()["feed"]: sf_feed()})
     result = jr.check(nor(), set())
@@ -383,20 +393,37 @@ def test_fetch_retries_then_raises_on_network_error(monkeypatch):
 class GitHub:
     """Fake GitHub issues API."""
 
+    BASE = "https://api.github.com/repos/someone/job-radar/issues"
+
     def __init__(self, monkeypatch, fail=False):
         self.created, self.closed, self.fail = [], [], fail
+        self.comments = []          # (issue number, body)
+        self.closed_by_user = set() # issue numbers you closed yourself
+        self.fail_titles = ()       # issue titles containing one of these fail
         monkeypatch.setenv("GITHUB_TOKEN", "t0ken")
         monkeypatch.setenv("GITHUB_REPOSITORY", "someone/job-radar")
         monkeypatch.setattr(jr.requests, "post", self.post)
         monkeypatch.setattr(jr.requests, "patch", self.patch)
+        monkeypatch.setattr(jr.requests, "get", self.get)
 
     def post(self, url, headers=None, json=None, timeout=None):
-        assert url == "https://api.github.com/repos/someone/job-radar/issues"
         assert headers["Authorization"] == "Bearer t0ken"
         if self.fail:
             return Resp(status=403)
+        if url.endswith("/comments"):
+            self.comments.append((int(url.split("/")[-2]), json["body"]))
+            return Resp(data={}, status=201)
+        assert url == self.BASE
+        if any(part in json["title"] for part in self.fail_titles):
+            return Resp(status=403)
         self.created.append(json)
         return Resp(data={"number": 40 + len(self.created)}, status=201)
+
+    def get(self, url, headers=None, timeout=None):
+        if self.fail:
+            return Resp(status=403)
+        number = int(url.rsplit("/", 1)[1])
+        return Resp(data={"number": number, "state": "closed" if number in self.closed_by_user else "open"})
 
     def patch(self, url, headers=None, json=None, timeout=None):
         assert json == {"state": "closed"}
@@ -419,7 +446,7 @@ def test_hits_issue_format(monkeypatch):
         {"target": "SAS Ground Handling", "text": "Servicemedarbeider (sommer)", "link": "https://x.test/job/A (1)/"},
         {"target": "ISS portal", "text": "PRM", "link": "https://y.test/2"},
     ]
-    assert jr.send_hits_issue(entries) is True
+    assert jr.send_hits_issue(entries) == 41
     issue = gh.created[0]
     assert issue["title"] == "🚨 MULIG TREFF: Servicemedarbeider (sommer) (+1 til)"
     assert issue["body"].startswith("@someone\n- [Servicemedarbeider (sommer)](https://x.test/job/A%20%281%29/) — SAS Ground Handling\n- [PRM](https://y.test/2) — ISS portal\n")
@@ -436,7 +463,7 @@ def test_notice_opens_and_closes_an_issue(monkeypatch):
 
 def test_issue_failure_is_reported_not_raised(monkeypatch, capsys):
     GitHub(monkeypatch, fail=True)
-    assert jr.create_issue("t", "b") is False
+    assert jr.create_issue("t", "b") is None
     assert "::error::GitHub issue failed: HTTP 403" in capsys.readouterr().out
 
 
@@ -528,13 +555,13 @@ def this_week():
     return f"{iso[0]}-W{iso[1]:02d}"
 
 
-def test_run_sends_one_issue_for_all_hits_and_saves_state(monkeypatch):
+def test_run_opens_one_issue_per_job_and_saves_state(monkeypatch):
     gh = GitHub(monkeypatch)
     no_heartbeat()
     fake_sources(monkeypatch, {"Alpha": result_with(hit("Alpha", 1), hit("Alpha", 2)), "Beta": result_with(hit("Beta", 9))})
     assert jr.run_radar(two_targets()) == 0
-    assert len(gh.created) == 1
-    assert gh.created[0]["title"] == "🚨 MULIG TREFF: Job 1 (+2 til)"
+    assert [i["title"] for i in gh.created] == ["🚨 MULIG TREFF: Job 1", "🚨 MULIG TREFF: Job 2", "🚨 MULIG TREFF: Job 9"]
+    assert "Lukk denne saken når du er ferdig" in gh.created[0]["body"] and gh.closed == []
     assert set(state()["seen"]) == {hit("Alpha", 1).key, hit("Alpha", 2).key, hit("Beta", 9).key}
     st = status()
     assert st["channels"] == {"email": True, "push": False}
@@ -542,6 +569,35 @@ def test_run_sends_one_issue_for_all_hits_and_saves_state(monkeypatch):
     assert [(t["name"], t["ok"], t["new_hits"], t["total_seen"], t["listings"]) for t in st["targets"]] == [
         ("Alpha", True, 2, 2, 3), ("Beta", True, 1, 1, 3)]
     assert [a["text"] for a in st["recent_alerts"]] == ["Job 9", "Job 2", "Job 1"]
+    jobs = json.loads(jr.JOBS_PATH.read_text(encoding="utf-8"))["jobs"]
+    assert {j["title"]: j["issue"] for j in jobs} == {"Job 1": 41, "Job 2": 42, "Job 9": 43}   # each job knows its thread
+
+
+def test_a_flood_of_hits_shares_one_issue(monkeypatch):
+    gh = GitHub(monkeypatch)
+    no_heartbeat()
+    many = [hit("Alpha", n) for n in range(jr.DIGEST_THRESHOLD + 1)]
+    fake_sources(monkeypatch, {"Alpha": result_with(*many), "Beta": result_with()})
+    jr.run_radar(two_targets())
+    assert [i["title"] for i in gh.created] == [f"🚨 MULIG TREFF: Job 0 (+{len(many) - 1} til)"]
+    assert len(state()["seen"]) == len(many)
+    assert {j["issue"] for j in json.loads(jr.JOBS_PATH.read_text(encoding="utf-8"))["jobs"]} == {41}
+
+
+def test_only_the_hit_whose_issue_failed_is_retried(monkeypatch):
+    gh = GitHub(monkeypatch)
+    gh.fail_titles = ("Job 2",)
+    no_heartbeat()
+    fake_sources(monkeypatch, {
+        "Alpha": lambda seen: result_with(*[h for h in (hit("Alpha", 1), hit("Alpha", 2)) if h.key not in seen]),
+        "Beta": result_with(),
+    })
+    jr.run_radar(two_targets())
+    assert state()["seen"] == [hit("Alpha", 1).key]
+    gh.fail_titles = ()
+    jr.run_radar(two_targets())
+    assert state()["seen"] == [hit("Alpha", 1).key, hit("Alpha", 2).key]
+    assert [i["title"] for i in gh.created] == ["🚨 MULIG TREFF: Job 1", "🚨 MULIG TREFF: Job 2"]
 
 
 def test_run_second_time_is_silent(monkeypatch):
@@ -892,3 +948,139 @@ def test_real_config_has_stable_ids_for_saved_notes():
     # the dashboard stores your notes per employer under these ids; changing one orphans the notes
     assert [t["id"] for t in CONFIG["targets"]][:5] == ["vy", "iss", "sas", "norwegian", "wideroe"]
     assert all(t.get("label") for t in CONFIG["targets"])
+
+
+# ------------------------------------------------------ deadline reminders
+
+from datetime import date as _date  # noqa: E402
+
+TODAY = _date(2026, 11, 20)
+
+
+def djob(n, deadline, reminded=(), issue=None, state="open"):
+    job = {"key": f"Alpha|{n}", "target": "Alpha", "title": f"Job {n}", "text": f"Job {n}", "link": f"https://alpha.test/{n}",
+           "deadline": deadline, "state": state, "reminded": list(reminded)}
+    if issue:
+        job["issue"] = issue
+    return job
+
+
+@pytest.mark.parametrize("deadline, reminded, expected", [
+    ("2026-11-27", [], None),            # a week away: nothing yet
+    ("2026-11-24", [], None),            # 4 days
+    ("2026-11-23", [], (3, 3)),          # 3 days: first reminder
+    ("2026-11-22", [], (2, 3)),          # run was skipped on day 3: still sent
+    ("2026-11-22", [3], None),           # already reminded at this step
+    ("2026-11-21", [3], (1, 1)),         # tomorrow: second reminder
+    ("2026-11-21", [], (1, 1)),          # first seen late: only the last reminder
+    ("2026-11-20", [3], (0, 1)),         # today, the day-before run was skipped
+    ("2026-11-20", [3, 1], None),        # both sent
+    ("2026-11-21", [1], None),
+    ("2026-11-23", [1], None),           # deadline moved later after the last reminder: no step backwards
+    ("2026-11-19", [], None),            # deadline passed
+    (None, [], None), ("tull", [], None),
+])
+def test_due_reminders(deadline, reminded, expected):
+    due = jr.due_reminders([djob(1, deadline, reminded)], TODAY)
+    assert [(left, level) for _, left, level in due] == ([expected] if expected else [])
+
+
+def test_no_reminder_for_closed_postings_or_jobs_alerted_this_run():
+    jobs = [djob(1, "2026-11-21", state="closed"), djob(2, "2026-11-21")]
+    assert jr.due_reminders(jobs, TODAY, skip_keys={"Alpha|2"}) == []
+    assert len(jr.due_reminders(jobs, TODAY)) == 1
+
+
+def test_reminder_is_a_comment_on_the_jobs_own_issue(monkeypatch):
+    gh = GitHub(monkeypatch)
+    jobs = [djob(1, "2026-11-21", issue=41)]
+    assert jr.send_reminders({}, jobs, TODAY) == 1
+    assert gh.created == []
+    number, body = gh.comments[0]
+    assert number == 41 and body.startswith("@someone ⏰ **Frist i morgen (21.11)**: [Job 1](https://alpha.test/1)")
+    assert jobs[0]["reminded"] == [1]
+    assert jr.send_reminders({}, jobs, TODAY) == 0 and len(gh.comments) == 1   # once
+
+
+def test_closing_the_issue_stops_reminders(monkeypatch):
+    gh = GitHub(monkeypatch)
+    gh.closed_by_user = {41}
+    jobs = [djob(1, "2026-11-21", issue=41), djob(2, "2026-11-23", issue=42)]
+    assert jr.send_reminders({}, jobs, TODAY) == 1
+    assert [n for n, _ in gh.comments] == [42]
+    assert jobs[0]["reminded"] == []   # reopen the issue and the reminder comes after all
+
+
+def test_reminder_for_a_job_without_its_own_issue_is_a_closed_notice(monkeypatch):
+    gh = GitHub(monkeypatch)
+    jobs = [djob(1, "2026-11-20")]
+    assert jr.send_reminders({}, jobs, TODAY) == 1
+    assert gh.created[0]["title"] == "⏰ FRIST I DAG (20.11): Job 1" and gh.closed == ["41"]
+
+
+def test_undelivered_reminder_is_tried_again(monkeypatch):
+    gh = GitHub(monkeypatch, fail=True)
+    jobs = [djob(1, "2026-11-21", issue=41)]
+    assert jr.send_reminders({}, jobs, TODAY) == 0 and jobs[0]["reminded"] == []
+    gh.fail = False
+    assert jr.send_reminders({}, jobs, TODAY) == 1 and jobs[0]["reminded"] == [1]
+
+
+def test_reminder_push_is_quieter_than_a_hit_and_louder_than_housekeeping(monkeypatch):
+    pushes = []
+    monkeypatch.setenv("NTFY_TOPIC", "my-topic")
+    monkeypatch.setattr(jr.requests, "post", lambda url, json=None, timeout=None: pushes.append(json) or Resp())
+    jr.send_reminders({}, [djob(1, "2026-11-23")], TODAY)
+    jr.send_direct({}, "POSSIBLE MATCH: SAS", "x")
+    jr.send_notice({}, "Radar lever", "x")
+    assert [(p["priority"], p["tags"]) for p in pushes] == [(4, ["alarm_clock"]), (5, ["rotating_light"]), (3, ["satellite"])]
+    assert pushes[0]["title"] == "⏰ Frist om 3 dager (23.11): Job 1"
+
+
+def test_run_reminds_on_a_later_run_not_with_the_first_alert(monkeypatch):
+    gh = GitHub(monkeypatch)
+    no_heartbeat()
+    monkeypatch.setattr(jr, "today_oslo", lambda: TODAY)
+    source = {"Alpha": lambda seen: jr.CheckResult(
+        [h for h in [hit("Alpha", 1)] if h.key not in seen],
+        [jr.open_item(hit("Alpha", 1).key, "Job 1", hit("Alpha", 1).link, deadline="2026-11-21")], 3), "Beta": result_with()}
+    fake_sources(monkeypatch, source)
+    jr.run_radar(two_targets())
+    assert len(gh.created) == 1 and gh.comments == []          # the alert itself, no reminder on top
+    jr.run_radar(two_targets())
+    assert [n for n, _ in gh.comments] == [41]                 # next run: reminder on that job's issue
+    jr.run_radar(two_targets())
+    assert len(gh.comments) == 1
+    assert json.loads(jr.JOBS_PATH.read_text(encoding="utf-8"))["jobs"][0]["reminded"] == [1]
+
+
+# ----------------------------------------------------------- calendar feed
+
+def test_calendar_has_one_all_day_event_per_open_job_with_a_deadline():
+    jobs = [
+        dict(djob(1, "2026-11-27"), first_seen="2026-11-10T08:00:00+00:00"),
+        djob(2, None), djob(3, "2026-11-25", state="closed"),
+        dict(djob(4, "2026-12-31"), title="Servicemedarbeider; sommer, 2027 " + "æøå " * 20),
+    ]
+    ics = jr.build_calendar(jobs, {"Alpha": "ALPHA · AS"})
+    assert ics.startswith("BEGIN:VCALENDAR\r\n") and ics.endswith("END:VCALENDAR\r\n")
+    assert "\n" not in ics.replace("\r\n", "")                      # CRLF everywhere
+    assert ics.count("BEGIN:VEVENT") == 2
+    assert "DTSTART;VALUE=DATE:20261127\r\nDTEND;VALUE=DATE:20261128" in ics
+    assert "DTSTAMP:20261110T080000Z" in ics
+    assert "SUMMARY:Søknadsfrist: Job 1 (ALPHA · AS)" in ics
+    assert "DTSTART;VALUE=DATE:20261231\r\nDTEND;VALUE=DATE:20270101" in ics   # year rollover
+    assert all(len(line.encode("utf-8")) <= 75 for line in ics.split("\r\n"))   # folded
+    unfolded = ics.replace("\r\n ", "")
+    assert "SUMMARY:Søknadsfrist: Servicemedarbeider\\; sommer\\, 2027 æøå" in unfolded
+    assert jr.build_calendar(jobs, {"Alpha": "ALPHA · AS"}) == ics       # stable: no churn in git
+
+
+def test_run_writes_the_calendar(monkeypatch):
+    GitHub(monkeypatch)
+    no_heartbeat()
+    fake_sources(monkeypatch, {"Alpha": result_with(hit("Alpha", 1), deadline="2026-12-01"), "Beta": result_with()})
+    jr.run_radar(two_targets())
+    ics = jr.CALENDAR_PATH.read_bytes().decode("utf-8")
+    assert "DTSTART;VALUE=DATE:20261201" in ics and "\r\n" in ics
+    assert status()["calendar"] is True

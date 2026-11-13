@@ -52,11 +52,21 @@ job-radar/
 
 To nivåer. VARSLING linja på tavla viser hva som er aktivt.
 
-**Nivå 1, virker fra dag én uten oppsett:** når radaren finner treff, oppretter skriptet et GitHub issue i repoet ditt, og GitHub sender deg epost om nye issues automatisk (standardinnstilling for egne repo). Én epost per kjøring uansett antall treff, med tittel, sted, frist og direktelenke til utlysningen. Sjekk at epost er på under github.com/settings/notifications, "Watching".
+**Nivå 1, virker fra dag én uten oppsett:** når radaren finner treff, oppretter skriptet et GitHub issue i repoet ditt, og GitHub sender deg epost om nye issues automatisk (standardinnstilling for egne repo). Hver stilling får sitt eget issue, altså én epost per stilling, med tittel, sted, frist og direktelenke til utlysningen. Kommer det mer enn 5 treff i én kjøring, samles de i ett. Sjekk at epost er på under github.com/settings/notifications, "Watching".
 
 Samme vei går tre andre meldinger: advarsel når en side har feilet 5 sjekker på rad, beskjed når den virker igjen, og den ukentlige "Radar lever". Disse issuene lukkes med en gang, så bare ekte treff blir stående åpne til du har sett på dem.
 
 Et treff regnes ikke som varslet før GitHub (eller en annen kanal) har tatt imot meldingen. Feiler sendingen, prøver radaren på nytt ved neste kjøring.
+
+**Påminnelse om frist:** har stillingen en søknadsfrist, får du en påminnelse 3 dager før og en dagen før, som en kommentar på stillingens issue (GitHub sender den som epost). **Lukk issuet når du er ferdig med stillingen**, enten du har søkt eller ikke vil ha den. Da slutter påminnelsene. At et issue er lukket sier ingenting om hvorfor, så ingen kan se hva du har søkt på. SAS og Norwegian oppgir ikke frist i lista, så de får ingen påminnelse.
+
+**Frister i kalenderen:** radaren skriver `docs/frister.ics`. Trykk ABONNER under RADAR på siden (eller åpne `webcal://BRUKERNAVN.github.io/job-radar/frister.ics` på telefonen) én gang, så ligger hver frist som en heldagshendelse i kalenderen din.
+
+**Push rett på mobilen (valgfritt, raskest):**
+1. Installer appen ntfy (App Store / Google Play).
+2. Finn på et langt, tilfeldig emnenavn, for eksempel `jobbradar-` pluss 20 tilfeldige tegn. Alle som kan navnet kan lese varslene, så ikke bruk noe som kan gjettes.
+3. Abonner på emnet i appen.
+4. Legg emnenavnet inn som secret `NTFY_TOPIC` i GitHub. Stillingstreff kommer med høyeste prioritet, fristpåminnelser litt lavere, driftsmeldinger som vanlig varsel.
 
 **Nivå 2, epost rett fra din egen Gmail (valgfritt):**
 1. Skru på totrinnsverifisering på Google kontoen hvis du ikke har det.

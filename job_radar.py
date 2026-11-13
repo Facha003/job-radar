@@ -30,6 +30,7 @@ Three kinds of source (the "type" field of a target in config.json):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import os
@@ -52,6 +53,7 @@ CONFIG_PATH = BASE / "config.json"
 STATE_PATH = BASE / "seen.json"
 STATUS_PATH = BASE / "docs" / "status.json"
 JOBS_PATH = BASE / "docs" / "jobs.json"
+CALENDAR_PATH = BASE / "docs" / "frister.ics"
 
 HEADERS = {
     "User-Agent": (
@@ -65,6 +67,7 @@ HEADERS = {
 FAIL_WARN_THRESHOLD = 5   # consecutive failures before you get a warning
 MAX_ALERT_HISTORY = 25    # alerts kept in seen.json and shown on the dashboard
 DIGEST_THRESHOLD = 5      # more hits than this in one run -> one summary ping, not a storm
+REMIND_DAYS = (3, 1)       # remind this many days before a deadline, once each
 MAX_JOB_HISTORY = 300     # postings remembered in docs/jobs.json (oldest closed ones go first)
 MAX_RUN_LOG = 200         # run times kept in status.json, so the dashboard can show real pace
 DEFAULT_DASHBOARD = "https://facha003.github.io/job-radar/"
@@ -126,6 +129,15 @@ def now_utc():
 
 def now_iso():
     return now_utc().isoformat(timespec="seconds")
+
+
+def today_oslo():
+    """Deadlines are Norwegian calendar dates, so 'days left' is counted in Oslo."""
+    try:
+        from zoneinfo import ZoneInfo
+        return now_utc().astimezone(ZoneInfo("Europe/Oslo")).date()
+    except Exception:  # noqa: BLE001 - no tz database on this machine: UTC is at most 2 h off
+        return now_utc().date()
 
 
 def load_json(path, default):
@@ -267,45 +279,80 @@ def create_issue(title, body, close=False):
     """Open a GitHub issue in this repo (GitHub then emails the owner).
     close=True closes it straight away: the mail still goes out, but
     housekeeping notices do not pile up as open issues.
-    Returns True when the issue was created. Never raises."""
+    Returns the issue number, or None when it could not be created. Never raises."""
+    api = issue_api()
+    if not api:
+        return None
+    url, headers, owner = api
+    try:
+        resp = requests.post(url, headers=headers, json={"title": title[:240], "body": f"@{owner}\n{body}"}, timeout=30)
+        resp.raise_for_status()
+        number = int(resp.json()["number"])
+    except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+        print(f"::error::GitHub issue failed: {short_error(exc)}")
+        return None
+    if close:
+        try:
+            requests.patch(f"{url}/{number}", headers=headers, json={"state": "closed"}, timeout=30).raise_for_status()
+        except requests.RequestException as exc:
+            print(f"could not close the issue (the mail was still sent): {short_error(exc)}")
+    return number
+
+
+def issue_api():
+    """(issues URL, headers, repo owner) or None when issues are not available."""
     conf = issue_conf()
     if not conf:
-        return False
+        return None
     token, repo = conf
-    owner = repo.split("/", 1)[0]
     api = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    try:
-        resp = requests.post(
-            f"{api}/repos/{repo}/issues",
-            headers=headers,
-            json={"title": title[:240], "body": f"@{owner}\n{body}"},
-            timeout=30,
-        )
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        print(f"::error::GitHub issue failed: {short_error(exc)}")
+    return f"{api}/repos/{repo}/issues", headers, repo.split("/", 1)[0]
+
+
+def issue_is_closed(number):
+    """True only when GitHub says the issue is closed. If we cannot tell,
+    treat it as open: an extra reminder beats a missed deadline."""
+    api = issue_api()
+    if not api or not number:
         return False
-    if close:
-        try:
-            requests.patch(
-                f"{api}/repos/{repo}/issues/{resp.json()['number']}",
-                headers=headers,
-                json={"state": "closed"},
-                timeout=30,
-            ).raise_for_status()
-        except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
-            print(f"could not close the issue (the mail was still sent): {exc}")
+    url, headers, _owner = api
+    try:
+        resp = requests.get(f"{url}/{number}", headers=headers, timeout=30)
+        resp.raise_for_status()
+        return resp.json().get("state") == "closed"
+    except (requests.RequestException, ValueError, AttributeError) as exc:
+        print(f"could not read issue #{number}: {short_error(exc)}")
+        return False
+
+
+def comment_issue(number, body):
+    """Comment on an issue (GitHub emails the owner). True when posted. Never raises."""
+    api = issue_api()
+    if not api or not number:
+        return False
+    url, headers, owner = api
+    try:
+        requests.post(f"{url}/{number}/comments", headers=headers, json={"body": f"@{owner} {body}"}, timeout=30).raise_for_status()
+    except requests.RequestException as exc:
+        print(f"::error::GitHub comment on #{number} failed: {short_error(exc)}")
+        return False
     return True
 
 
-def send_direct(cfg, title, message, url=""):
+PUSH_HIT = (5, "rotating_light")       # a job you want: loudest
+PUSH_REMINDER = (4, "alarm_clock")     # a deadline is close
+PUSH_NOTICE = (3, "satellite")         # housekeeping: normal volume
+
+
+def send_direct(cfg, title, message, url="", push=PUSH_HIT):
     """Push the alert through every channel you configured yourself:
     ntfy push, SMTP email, Telegram. Env vars override config.
+    push is (ntfy priority, tag). Only job hits ring at full volume.
     Returns True when at least one of them delivered. Never raises."""
     sent = False
 
@@ -316,8 +363,8 @@ def send_direct(cfg, title, message, url=""):
                 "topic": topic,
                 "title": title,
                 "message": message,
-                "priority": 5,
-                "tags": ["rotating_light"],
+                "priority": push[0],
+                "tags": [push[1]],
             }
             if url:
                 payload["click"] = url
@@ -352,7 +399,7 @@ def send_notice(cfg, title, message, url=""):
     """Housekeeping mail (site unreachable, site back, weekly 'alive', test):
     every direct channel, plus a GitHub issue that is closed straight away
     when that is the email route. Returns True when something delivered."""
-    sent = send_direct(cfg, title, message, url)
+    sent = send_direct(cfg, title, message, url, push=PUSH_NOTICE)
     if email_mode(cfg) == "issue":
         body = message + (f"\n\n{url}" if url else "")
         if create_issue(title, body, close=True):
@@ -366,13 +413,17 @@ def md_link(text, link):
 
 
 def send_hits_issue(entries, close=False):
-    """One issue (= one email) per run, however many hits it had."""
+    """One issue (= one email) for these hits. Returns its number or None.
+    A normal run opens one issue per job, so each job has its own thread that
+    you close when you are done with it (which also stops deadline reminders).
+    A flood above the digest threshold goes in a single issue."""
     title = entries[0]["text"]
     if len(entries) > 1:
         title = f"{title} (+{len(entries) - 1} til)"
     lines = [f"- {md_link(e['text'], e['link'])} — {e['target']}" for e in entries]
     stamp = now_utc().strftime("%d.%m.%Y %H:%M")
-    body = "\n".join(lines) + f"\n\nRadaren fant dette {stamp} UTC. Triager på tavla, utrykning hvis HØY."
+    body = ("\n".join(lines) + f"\n\nRadaren fant dette {stamp} UTC. "
+            "Lukk denne saken når du er ferdig med stillingen, da slutter også påminnelsene om frist.")
     return create_issue(f"🚨 MULIG TREFF: {title}", body, close=close)
 
 
@@ -688,7 +739,11 @@ def check_successfactors(target, seen_keys, log: Log = _quiet):
 
     resp = fetch("GET", target["feed"], headers=HEADERS, timeout=40)
     # the feed is served without a charset; it is UTF-8
-    jobs = parse_successfactors(resp.content.decode("utf-8", errors="replace"))
+    feed_text = resp.content.decode("utf-8", errors="replace")
+    if "<Job-Listing" not in feed_text and "maintenance" in (str(getattr(resp, "url", "")) + feed_text[:3000]).lower():
+        # SAP takes the whole service down for release upgrades (seen 13.11.2026, about 15 hours)
+        raise SourceError("SAP SuccessFactors er nede for planlagt vedlikehold, feeden kommer tilbake av seg selv")
+    jobs = parse_successfactors(feed_text)
     log(f"HTTP {resp.status_code}, {len(resp.content)} bytes, {len(jobs)} jobs in feed")
 
     hits = []
@@ -747,7 +802,7 @@ def check(target, seen_keys, log: Log = _quiet):
 # job memory (docs/jobs.json)
 # --------------------------------------------------------------------------
 
-def update_jobs(prev_jobs, checked, now, first_seen_hint=None):
+def update_jobs(prev_jobs, checked, now, first_seen_hint=None, issues=None):
     """Fold this run into the list of every wanted posting ever seen.
 
     prev_jobs  the "jobs" list from the last docs/jobs.json
@@ -760,6 +815,7 @@ def update_jobs(prev_jobs, checked, now, first_seen_hint=None):
     that answered is closed. A source that failed says nothing about its
     postings, so they are left exactly as they were."""
     hint = first_seen_hint or {}
+    issues = issues or {}
     jobs = {j["key"]: dict(j) for j in prev_jobs if isinstance(j, dict) and j.get("key")}
     for target, result, _error in checked:
         if result is None:
@@ -790,6 +846,8 @@ def update_jobs(prev_jobs, checked, now, first_seen_hint=None):
                 "state": "open",
                 "closed_at": None,
             })
+            if key in issues:
+                job["issue"] = issues[key]   # the GitHub issue that alerted this job
         for job in jobs.values():
             if job.get("target") == name and job.get("state") == "open" and job["key"] not in live:
                 job["state"] = "closed"
@@ -803,6 +861,135 @@ def update_jobs(prev_jobs, checked, now, first_seen_hint=None):
         drop = {j["key"] for j in closed[:extra]}
         ordered = [j for j in ordered if j["key"] not in drop]
     return ordered
+
+
+# --------------------------------------------------------------------------
+# deadline reminders and the calendar feed
+# --------------------------------------------------------------------------
+
+def days_left(job, today):
+    try:
+        return (date.fromisoformat(job.get("deadline") or "") - today).days
+    except ValueError:
+        return None
+
+
+def due_reminders(jobs, today, skip_keys=()):
+    """[(job, days left, level)] for open jobs whose deadline is close.
+    level is the REMIND_DAYS step being served (3, then 1). Each step is sent
+    once. A job alerted in this very run (skip_keys) waits until the next run:
+    you just got its alert."""
+    due = []
+    for job in jobs:
+        left = days_left(job, today)
+        if job.get("state") != "open" or left is None or left < 0 or job["key"] in skip_keys:
+            continue
+        done = job.get("reminded", [])
+        # the tightest step that applies; once a tighter one is sent the looser ones are moot
+        level = next((d for d in sorted(REMIND_DAYS) if left <= d), None)
+        if level is None or any(d <= level for d in done):
+            continue
+        due.append((job, left, level))
+    return due
+
+
+def reminder_text(left):
+    return "FRIST I DAG" if left == 0 else "Frist i morgen" if left == 1 else f"Frist om {left} dager"
+
+
+def send_reminders(cfg, jobs, today, skip_keys=()):
+    """Send what due_reminders() found and mark each as sent on the job.
+    Closing a job's GitHub issue means "done with this one": no reminder."""
+    sent = 0
+    for job, left, level in due_reminders(jobs, today, skip_keys):
+        number = job.get("issue")
+        if number and issue_is_closed(number):
+            continue
+        when = date.fromisoformat(job["deadline"]).strftime("%d.%m")
+        title = f"⏰ {reminder_text(left)} ({when}): {job.get('title') or job.get('text', '')}"
+        delivered = send_direct(cfg, title, f"{job.get('target', '')}. Søknadsfristen er {when}.", job.get("link", ""), push=PUSH_REMINDER)
+        if email_mode(cfg) == "issue":
+            line = f"**{reminder_text(left)} ({when})**: {md_link(job.get('title') or job.get('text', ''), job.get('link', ''))}"
+            if number:
+                ok = comment_issue(number, f"⏰ {line}\n\nFerdig med denne? Lukk saken, så slutter påminnelsene.")
+            else:  # alerted before jobs had their own issue: a notice of its own
+                ok = bool(create_issue(title, f"⏰ {line} — {job.get('target', '')}", close=True))
+            delivered = delivered or ok
+        if delivered or not any_channel(cfg):
+            job["reminded"] = sorted(set(job.get("reminded", [])) | {level})
+            sent += 1
+    return sent
+
+
+def ics_escape(text):
+    return (str(text or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,")
+            .replace("\r", "").replace("\n", "\\n"))
+
+
+def ics_fold(line):
+    """RFC 5545: lines are at most 75 bytes; continuation lines start with a space."""
+    raw = line.encode("utf-8")
+    if len(raw) <= 75:
+        return [line]
+    out, chunk = [], b""
+    for ch in line:
+        b = ch.encode("utf-8")
+        if len(chunk) + len(b) > (75 if not out else 74):
+            out.append(chunk.decode("utf-8"))
+            chunk = b""
+        chunk += b
+    out.append(chunk.decode("utf-8"))
+    return [out[0]] + [" " + part for part in out[1:]]
+
+
+def build_calendar(jobs, labels=None):
+    """iCalendar text: one all-day event on the deadline of every open job.
+    Subscribe to docs/frister.ics once and the deadlines follow you."""
+    labels = labels or {}
+    lines = [
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//jobbradar//frister//NO", "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH", "X-WR-CALNAME:Jobbradar frister", "X-WR-TIMEZONE:Europe/Oslo",
+        "REFRESH-INTERVAL;VALUE=DURATION:PT6H", "X-PUBLISHED-TTL:PT6H",
+    ]
+    for job in sorted(jobs, key=lambda j: (j.get("deadline") or "", j.get("key", ""))):
+        if job.get("state") != "open":
+            continue
+        try:
+            day = date.fromisoformat(job.get("deadline") or "")
+        except ValueError:
+            continue
+        try:
+            stamp = datetime.fromisoformat(job.get("first_seen", "")).astimezone(timezone.utc)
+        except (ValueError, TypeError):
+            stamp = datetime(day.year, 1, 1, tzinfo=timezone.utc)
+        title = job.get("title") or job.get("text", "")
+        who = labels.get(job.get("target"), job.get("target", ""))
+        uid = hashlib.sha1(job["key"].encode("utf-8")).hexdigest()[:20]
+        end = date.fromordinal(day.toordinal() + 1)
+        lines += [
+            "BEGIN:VEVENT",
+            f"UID:{uid}@jobbradar",
+            f"DTSTAMP:{stamp.strftime('%Y%m%dT%H%M%SZ')}",
+            f"DTSTART;VALUE=DATE:{day.strftime('%Y%m%d')}",
+            f"DTEND;VALUE=DATE:{end.strftime('%Y%m%d')}",
+            f"SUMMARY:{ics_escape('Søknadsfrist: ' + title + (f' ({who})' if who else ''))}",
+            f"DESCRIPTION:{ics_escape(job.get('link', ''))}",
+            f"URL:{job.get('link', '')}",
+            "TRANSP:TRANSPARENT",
+            "BEGIN:VALARM", "ACTION:DISPLAY", f"DESCRIPTION:{ics_escape('Søknadsfrist i morgen: ' + title)}",
+            "TRIGGER:-PT15H",   # 09:00 the day before
+            "END:VALARM",
+            "END:VEVENT",
+        ]
+    lines.append("END:VCALENDAR")
+    return "\r\n".join(part for line in lines for part in ics_fold(line)) + "\r\n"
+
+
+def save_text(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_bytes(text.encode("utf-8"))   # bytes: keep the CRLF line ends exactly
+    os.replace(tmp, path)
 
 
 # --------------------------------------------------------------------------
@@ -957,20 +1144,25 @@ def run_radar(cfg, force_heartbeat=False):
         checked.append((target, result, ""))
         print(f"[{name}] checked OK, {len(result.hits)} new hit(s)")
 
-    # one GitHub issue (= one email) for the whole run
-    issue_ok = False
+    # One GitHub issue (= one email) per job; a flood shares a single issue.
+    issue_of = {}   # hit key -> issue number
     if pending and email_mode(cfg) == "issue":
-        stamp = now_iso()
-        issue_ok = send_hits_issue([
-            {"time": stamp, "target": name, "text": hit.text, "link": hit.link}
-            for name, hit, _ in pending
-        ])
+        entries = [{"target": name, "text": hit.text, "link": hit.link} for name, hit, _ in pending]
+        if len(pending) > DIGEST_THRESHOLD:
+            number = send_hits_issue(entries)
+            if number:
+                issue_of = {hit.key: number for _, hit, _ in pending}
+        else:
+            for (_, hit, _), entry in zip(pending, entries):
+                number = send_hits_issue([entry])
+                if number:
+                    issue_of[hit.key] = number
 
     # A hit only counts as seen once it actually reached you. If every channel
     # failed, it stays unseen and alerts again on the next run.
     undelivered = 0
     for name, hit, direct_ok in pending:
-        if direct_ok or issue_ok or not channels_exist:
+        if direct_ok or hit.key in issue_of or not channels_exist:
             seen_keys.add(hit.key)
             alerts.insert(0, {"time": now_iso(), "target": name, "text": hit.text, "link": hit.link})
         else:
@@ -1019,18 +1211,21 @@ def run_radar(cfg, force_heartbeat=False):
         if a.get("time"):
             hint[a.get("link")] = a["time"]
             hint[f"{a.get('target')}|{a.get('text')}"] = a["time"]
-    jobs = update_jobs(load_json(JOBS_PATH, {}).get("jobs", []), checked, stamp, first_seen_hint=hint)
+    jobs = update_jobs(load_json(JOBS_PATH, {}).get("jobs", []), checked, stamp, first_seen_hint=hint, issues=issue_of)
+    reminders = send_reminders(cfg, jobs, today_oslo(), skip_keys={hit.key for _, hit, _ in pending})
     save_json(JOBS_PATH, {"generated": stamp, "jobs": jobs})
+    save_text(CALENDAR_PATH, build_calendar(jobs, {t.get("name"): t.get("label") or t.get("name") for t in cfg.get("targets", [])}))
     save_json(STATUS_PATH, {
         "generated": stamp,
         "channels": {"email": bool(email_mode(cfg)), "push": bool(get_topic(cfg))},
         "targets": run_report,
         "recent_alerts": alerts,
         "runs": (prev_status.get("runs", []) + [stamp])[-MAX_RUN_LOG:],
+        "calendar": True,   # docs/frister.ics exists; the dashboard shows a subscribe link
     })
     delivered = len(pending) - undelivered
     open_now = sum(1 for j in jobs if j.get("state") == "open")
-    print(f"Done. {delivered} new alert(s) this run, {open_now} wanted job(s) open. "
+    print(f"Done. {delivered} new alert(s) and {reminders} deadline reminder(s) this run, {open_now} wanted job(s) open. "
           "Status written to docs/status.json and docs/jobs.json")
     return 0
 

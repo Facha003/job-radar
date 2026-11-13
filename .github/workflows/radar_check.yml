@@ -99,5 +99,5 @@ jobs:
         run: |
           git config user.name "radar-bot"
           git config user.email "radar-bot@users.noreply.github.com"
-          git add seen.json docs/status.json docs/jobs.json
+          git add seen.json docs/status.json docs/jobs.json docs/frister.ics
           git diff --cached --quiet || (git commit -m "radar update" && git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME")

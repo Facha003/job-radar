@@ -19,7 +19,9 @@ GitHub Actions (cron every 10 min, paced to one real check per ~30 min)
        │    the Webcruiter JSON API (Vy), the SuccessFactors job feed (Norwegian)
        ├─ filters each listing: location → exclusions → role keywords
        │    └─ vague titles: opens the ad and checks the role in the body
-       ├─ new matches → one GitHub issue per run → email notification
+       ├─ new matches → one GitHub issue per job → email notification
+       ├─ deadline reminders 3 days and 1 day before, as a comment on the job's issue
+       ├─ docs/frister.ics: a calendar feed of the deadlines
        ├─ a site that fails 5 checks in a row → warning mail, and a mail when it is back
        ├─ weekly "radar alive" mail with live listing counts per company
        ├─ remembers every wanted posting in docs/jobs.json: first seen, deadline, open or closed
@@ -53,6 +55,8 @@ GitHub Pages
 **Go around a blocked door, not through it.** In November 2026 Norwegian's career site started answering GitHub's servers with a Cloudflare challenge (HTTP 403) on every page, feed and sitemap. Rather than disguise the scraper, the radar now reads the public job feed SAP hosts for the same recruiting system. That feed has no location field, so a role match that never mentions Oslo or Gardermoen still alerts, tagged "location not confirmed", unless its title plainly names another airport.
 
 **An alert only counts once it is delivered.** A posting is marked as seen after a channel has accepted the alert. If delivery fails, it stays unseen and alerts again on the next run. Warnings about a broken site travel the same road as job alerts, so they cannot be lost quietly either.
+
+**Closing the issue is the off switch.** Each job gets its own GitHub issue. Deadline reminders go there as comments, and stop when the issue is closed. The radar never needs to know whether I applied: that stays in my browser, and a closed issue in a public repo says nothing about why it was closed.
 
 **One broken site never stops the others.** Any error in one target, including a bug in its parser, is counted as that target's failure and shown on the dashboard with the reason. The rest of the run carries on.
 
