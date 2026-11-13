@@ -12,6 +12,8 @@ Real run:    python job_radar.py --write    (what GitHub Actions does: alert + s
 Test alert:  python job_radar.py --test
 State:       seen.json is created automatically. Delete it to re-alert on everything.
 Status:      docs/status.json is rewritten every real run. The dashboard reads it.
+Jobs:        docs/jobs.json remembers every wanted posting: first seen, deadline,
+             open or closed. The dashboard's job list and history read it.
 
 Designed to run on a schedule in GitHub Actions (see .github/workflows/radar_check.yml).
 Polite by design: one request per target per run against public career pages and feeds.
@@ -36,7 +38,7 @@ import smtplib
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Callable, NamedTuple
@@ -49,6 +51,7 @@ BASE = Path(__file__).resolve().parent
 CONFIG_PATH = BASE / "config.json"
 STATE_PATH = BASE / "seen.json"
 STATUS_PATH = BASE / "docs" / "status.json"
+JOBS_PATH = BASE / "docs" / "jobs.json"
 
 HEADERS = {
     "User-Agent": (
@@ -62,6 +65,8 @@ HEADERS = {
 FAIL_WARN_THRESHOLD = 5   # consecutive failures before you get a warning
 MAX_ALERT_HISTORY = 25    # alerts kept in seen.json and shown on the dashboard
 DIGEST_THRESHOLD = 5      # more hits than this in one run -> one summary ping, not a storm
+MAX_JOB_HISTORY = 300     # postings remembered in docs/jobs.json (oldest closed ones go first)
+MAX_RUN_LOG = 200         # run times kept in status.json, so the dashboard can show real pace
 DEFAULT_DASHBOARD = "https://facha003.github.io/job-radar/"
 
 UNREADABLE_TAG = "  [kunne ikke lese annonsen, sjekk rollen selv]"
@@ -81,7 +86,7 @@ class Hit(NamedTuple):
 @dataclass
 class CheckResult:
     hits: list            # new postings (not in seen.json) that should alert
-    open: list            # every wanted posting live right now: [{"text", "link"}]
+    open: list            # every wanted posting live right now, see open_item()
     listings: int | None  # how many listings the source showed (parser health)
 
 
@@ -407,6 +412,45 @@ def find_deadline(row_text):
     return ""
 
 
+MONTHS = {
+    "januar": 1, "februar": 2, "mars": 3, "april": 4, "mai": 5, "juni": 6, "juli": 7,
+    "august": 8, "september": 9, "oktober": 10, "november": 11, "desember": 12,
+}
+DATE_ISO_RE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})")
+DATE_DOTS_RE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b")
+DATE_WORDS_RE = re.compile(r"\b(\d{1,2})\.?\s+(" + "|".join(MONTHS) + r")\s+(\d{4})\b", re.I)
+
+
+def parse_deadline(text):
+    """A deadline as written on a career page -> 'YYYY-MM-DD', or None when
+    there is no real date in it ("snarest", empty, nonsense)."""
+    text = text or ""
+    try:
+        m = DATE_ISO_RE.search(text)
+        if m:
+            found = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        else:
+            m = DATE_DOTS_RE.search(text)
+            if m:
+                found = date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+            else:
+                m = DATE_WORDS_RE.search(text)
+                if not m:
+                    return None
+                found = date(int(m.group(3)), MONTHS[m.group(2).lower()], int(m.group(1)))
+    except ValueError:  # 31.02.2026 and friends
+        return None
+    return found.isoformat() if found.year > 1970 else None
+
+
+def open_item(key, title, link, label=None, deadline=None):
+    """One wanted posting that is live right now.
+    text      what alerts and the dashboard show ("Title · frist 27.11.2026")
+    title     the same without the deadline part
+    deadline  'YYYY-MM-DD' when the source states a real date, else None"""
+    return {"key": key, "text": label or title, "title": title, "link": link, "deadline": deadline}
+
+
 def fetch_detail_text(link):
     """Lowercased text of one job ad, or None if it can't be read
     (network error, or a JS-only page with almost no text)."""
@@ -505,7 +549,7 @@ def check_html(target, seen_keys, log: Log = _quiet):
         run_keys.add(key)
         deadline = find_deadline(raw_row)
         label = f"{text} · frist {deadline}" if deadline else text
-        open_matches.append({"text": label, "link": link})
+        open_matches.append(open_item(key, text, link, label, parse_deadline(deadline)))
         if key not in seen_keys:
             hits.append(Hit(label, link, key))
 
@@ -573,7 +617,8 @@ def check_webcruiter(target, seen_keys, log: Log = _quiet):
         place = (ad.get("Workplace") or "").strip()
         parts = [heading, f"({place})" if place else "", "·", webcruiter_deadline(ad)]
         label = " ".join(p for p in parts if p)
-        open_matches.append({"text": label, "link": link})
+        title = f"{heading} ({place})" if place else heading
+        open_matches.append(open_item(key, title, link, label, parse_deadline(ad.get("ApplicationDeadline") or "")))
         if key not in seen_keys:
             hits.append(Hit(label, link, key))
     return CheckResult(hits, open_matches, len(ads))
@@ -677,7 +722,7 @@ def check_successfactors(target, seen_keys, log: Log = _quiet):
             continue
         run_keys.add(key)
         link = target["job_link"].replace("{id}", job["id"]) if job["id"] and target.get("job_link") else target["url"]
-        open_matches.append({"text": label, "link": link})
+        open_matches.append(open_item(key, label, link))  # the feed states no deadline
         if key not in seen_keys:
             hits.append(Hit(label, link, key))
     return CheckResult(hits, open_matches, len(jobs))
@@ -696,6 +741,66 @@ def check(target, seen_keys, log: Log = _quiet):
     if kind not in SOURCES:
         raise SourceError(f"unknown target type '{kind}' in config.json")
     return SOURCES[kind](target, seen_keys, log)
+
+
+# --------------------------------------------------------------------------
+# job memory (docs/jobs.json)
+# --------------------------------------------------------------------------
+
+def update_jobs(prev_jobs, checked, now, first_seen_by_link=None):
+    """Fold this run into the list of every wanted posting ever seen.
+
+    prev_jobs  the "jobs" list from the last docs/jobs.json
+    checked    [(target, CheckResult or None, error)] as built by run_radar
+    now        ISO timestamp of this run
+
+    A posting listed now is open. One that was open and is gone from a source
+    that answered is closed. A source that failed says nothing about its
+    postings, so they are left exactly as they were."""
+    first_seen_by_link = first_seen_by_link or {}
+    jobs = {j["key"]: dict(j) for j in prev_jobs if isinstance(j, dict) and j.get("key")}
+    for target, result, _error in checked:
+        if result is None:
+            continue
+        name = target.get("name", "?")
+        live = set()
+        for item in result.open:
+            key = item.get("key")
+            if not key:
+                continue
+            live.add(key)
+            job = jobs.get(key)
+            if job is None:
+                job = jobs[key] = {
+                    "key": key,
+                    "target": name,
+                    "first_seen": first_seen_by_link.get(item.get("link"), now),
+                    "deadline": None,
+                }
+            job.update({
+                "target": name,
+                "text": item.get("text", ""),
+                "title": item.get("title") or item.get("text", ""),
+                "link": item.get("link", ""),
+                # a deadline once known is kept if a later read cannot find it
+                "deadline": item.get("deadline") or job.get("deadline"),
+                "last_seen": now,
+                "state": "open",
+                "closed_at": None,
+            })
+        for job in jobs.values():
+            if job.get("target") == name and job.get("state") == "open" and job["key"] not in live:
+                job["state"] = "closed"
+                job["closed_at"] = now
+
+    ordered = sorted(jobs.values(), key=lambda j: (j.get("first_seen", ""), j["key"]))
+    extra = len(ordered) - MAX_JOB_HISTORY
+    if extra > 0:
+        closed = sorted((j for j in ordered if j.get("state") == "closed"),
+                        key=lambda j: (j.get("closed_at") or "", j["key"]))
+        drop = {j["key"] for j in closed[:extra]}
+        ordered = [j for j in ordered if j["key"] not in drop]
+    return ordered
 
 
 # --------------------------------------------------------------------------
@@ -805,7 +910,8 @@ def run_radar(cfg, force_heartbeat=False):
     seen_keys = set(state.get("seen", []))
     fail_counts = state.get("fail", {})
     alerts = state.get("alerts", [])
-    prev_open = {t["name"]: t.get("open", []) for t in load_json(STATUS_PATH, {}).get("targets", [])}
+    prev_status = load_json(STATUS_PATH, {})
+    prev_open = {t["name"]: t.get("open", []) for t in prev_status.get("targets", [])}
 
     channels_exist = any_channel(cfg)
     if not channels_exist:
@@ -902,14 +1008,23 @@ def run_radar(cfg, force_heartbeat=False):
         "heartbeat_week": heartbeat_week,
         "last_counts": last_counts,
     })
+    stamp = now_iso()
+    jobs = update_jobs(
+        load_json(JOBS_PATH, {}).get("jobs", []), checked, stamp,
+        first_seen_by_link={a["link"]: a["time"] for a in reversed(alerts) if a.get("link") and a.get("time")},
+    )
+    save_json(JOBS_PATH, {"generated": stamp, "jobs": jobs})
     save_json(STATUS_PATH, {
-        "generated": now_iso(),
+        "generated": stamp,
         "channels": {"email": bool(email_mode(cfg)), "push": bool(get_topic(cfg))},
         "targets": run_report,
         "recent_alerts": alerts,
+        "runs": (prev_status.get("runs", []) + [stamp])[-MAX_RUN_LOG:],
     })
     delivered = len(pending) - undelivered
-    print(f"Done. {delivered} new alert(s) this run. Status written to docs/status.json")
+    open_now = sum(1 for j in jobs if j.get("state") == "open")
+    print(f"Done. {delivered} new alert(s) this run, {open_now} wanted job(s) open. "
+          "Status written to docs/status.json and docs/jobs.json")
     return 0
 
 

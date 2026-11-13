@@ -64,6 +64,7 @@ def clean_env(monkeypatch, tmp_path):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(jr, "STATE_PATH", tmp_path / "seen.json")
     monkeypatch.setattr(jr, "STATUS_PATH", tmp_path / "docs" / "status.json")
+    monkeypatch.setattr(jr, "JOBS_PATH", tmp_path / "docs" / "jobs.json")
     monkeypatch.setattr(jr.time, "sleep", lambda s: None)
 
     def no_network(*a, **k):
@@ -506,8 +507,8 @@ def hit(name, n):
     return jr.Hit(f"Job {n}", f"https://{name.lower()}.test/job/{n}", f"{name}|https://{name.lower()}.test/job/{n}")
 
 
-def result_with(*hits, listings=3):
-    return jr.CheckResult(list(hits), [{"text": h.text, "link": h.link} for h in hits], listings)
+def result_with(*hits, listings=3, deadline=None):
+    return jr.CheckResult(list(hits), [jr.open_item(h.key, h.text, h.link, deadline=deadline) for h in hits], listings)
 
 
 def state():
@@ -744,3 +745,141 @@ def test_real_config_is_well_formed():
     # a place we want must never also be listed as "elsewhere"
     n = nor()
     assert not [e for e in n["location_elsewhere"] if any(w in e or e in w for w in n["location_must_contain"])]
+
+
+# ------------------------------------------------------- deadlines as dates
+
+@pytest.mark.parametrize("text, expected", [
+    ("27.11.2026", "2026-11-27"),                           # ISS / ReachMee
+    ("7.1.2027", "2027-01-07"),
+    ("Søndag 15. november 2026", "2026-11-15"),             # Jobbnorge
+    ("Fredag 6. NOVEMBER 2026", "2026-11-06"),
+    ("1 mars 2027", "2027-03-01"),
+    ("2026-08-26T00:00:00", "2026-08-26"),                  # Webcruiter
+    ("2026-12-24T23:59:00+01:00", "2026-12-24"),
+    ("0001-01-01T00:00:00", None),                          # Webcruiter's "no deadline"
+    ("31.02.2026", None),
+    ("snarest", None), ("", None), (None, None),
+])
+def test_parse_deadline(text, expected):
+    assert jr.parse_deadline(text) == expected
+
+
+def test_open_items_carry_key_title_and_deadline(monkeypatch):
+    serve(monkeypatch, {WID_URL: "<ul>" + wid_row(2, "Flyekspeditør", "Oslo lufthavn, Gardermoen", "Fredag 6. november 2026") + "</ul>"})
+    assert jr.check(target("Widerøe"), set()).open == [{
+        "key": "Widerøe Ground Handling|https://www.jobbnorge.no/ledige-stillinger/stilling/2/x",
+        "text": "Flyekspeditør · frist Fredag 6. november 2026",
+        "title": "Flyekspeditør",
+        "link": "https://www.jobbnorge.no/ledige-stillinger/stilling/2/x",
+        "deadline": "2026-11-06",
+    }]
+    ads = [{"Id": "1", "Heading": "Kundeveileder", "Workplace": "Oslo", "OpenAdvertUrl": "https://vy.test/1",
+            "ApplicationDeadline": "2026-08-26T00:00:00"},
+           {"Id": "2", "Heading": "Kundevert", "ApplicationDeadline": "0001-01-01T00:00:00"}]
+    serve(monkeypatch, {VY_API: Resp(data={"Data": ads})})
+    vy = jr.check(target("Vy"), set()).open
+    assert [(o["key"], o["title"], o["deadline"]) for o in vy] == [
+        ("Vy karriere|webcruiter|1", "Kundeveileder (Oslo)", "2026-08-26"),
+        ("Vy karriere|webcruiter|2", "Kundevert", None),
+    ]
+    serve(monkeypatch, {nor()["feed"]: sf_feed(sf_job("Customer Service Agent, OSL", 3133, "Oslo Airport."))})
+    assert jr.check(nor(), set()).open == [{
+        "key": "Norwegian (Red Handling)|successfactors|3133", "text": "Customer Service Agent, OSL",
+        "title": "Customer Service Agent, OSL", "link": "https://careers.norwegian.com/job-invite/3133/", "deadline": None,
+    }]
+
+
+# ------------------------------------------------------------- job memory
+
+T1, T2, T3 = "2026-11-10T08:00:00+00:00", "2026-11-11T08:00:00+00:00", "2026-11-12T08:00:00+00:00"
+ALPHA, BETA = {"name": "Alpha"}, {"name": "Beta"}
+
+
+def seen_open(name, *nums, deadline=None):
+    return jr.CheckResult([], [jr.open_item(f"{name}|{n}", f"Job {n}", f"https://{name}.test/{n}", deadline=deadline) for n in nums], 5)
+
+
+def states(jobs):
+    return {j["key"]: j["state"] for j in jobs}
+
+
+def test_jobs_open_close_and_reopen():
+    jobs = jr.update_jobs([], [(ALPHA, seen_open("Alpha", 1, 2), "")], T1)
+    assert states(jobs) == {"Alpha|1": "open", "Alpha|2": "open"}
+    assert jobs[0]["first_seen"] == T1 and jobs[0]["closed_at"] is None
+
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 2), "")], T2)      # job 1 is gone
+    by = {j["key"]: j for j in jobs}
+    assert states(jobs) == {"Alpha|1": "closed", "Alpha|2": "open"}
+    assert by["Alpha|1"]["closed_at"] == T2 and by["Alpha|1"]["last_seen"] == T1
+    assert by["Alpha|2"]["first_seen"] == T1 and by["Alpha|2"]["last_seen"] == T2
+
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 1, 2), "")], T3)   # job 1 is back
+    by = {j["key"]: j for j in jobs}
+    assert by["Alpha|1"]["state"] == "open" and by["Alpha|1"]["closed_at"] is None
+    assert by["Alpha|1"]["first_seen"] == T1
+
+
+def test_jobs_failed_source_never_closes_anything():
+    jobs = jr.update_jobs([], [(ALPHA, seen_open("Alpha", 1), ""), (BETA, seen_open("Beta", 7), "")], T1)
+    jobs = jr.update_jobs(jobs, [(ALPHA, None, "HTTP 403 Forbidden"), (BETA, seen_open("Beta"), "")], T2)
+    by = {j["key"]: j for j in jobs}
+    assert by["Alpha|1"]["state"] == "open" and by["Alpha|1"]["last_seen"] == T1   # untouched
+    assert by["Beta|7"]["state"] == "closed"
+
+
+def test_jobs_keep_a_known_deadline_and_use_alert_time_as_first_seen():
+    jobs = jr.update_jobs([], [(ALPHA, seen_open("Alpha", 1, deadline="2026-12-01"), "")], T2,
+                          first_seen_by_link={"https://Alpha.test/1": T1})
+    assert jobs[0]["first_seen"] == T1 and jobs[0]["deadline"] == "2026-12-01"
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 1), "")], T3)      # deadline unreadable this time
+    assert jobs[0]["deadline"] == "2026-12-01"
+
+
+def test_jobs_history_is_capped_dropping_oldest_closed_first(monkeypatch):
+    monkeypatch.setattr(jr, "MAX_JOB_HISTORY", 3)
+    jobs = jr.update_jobs([], [(ALPHA, seen_open("Alpha", 1, 2, 3), "")], T1)
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 2, 3), "")], T2)          # 1 closes first
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 3, 4, 5), "")], T3)       # 2 closes, 4 and 5 are new
+    # five known, room for three: both closed ones go, open jobs are never dropped
+    assert states(jobs) == {"Alpha|3": "open", "Alpha|4": "open", "Alpha|5": "open"}
+
+    monkeypatch.setattr(jr, "MAX_JOB_HISTORY", 4)
+    jobs = jr.update_jobs([], [(ALPHA, seen_open("Alpha", 1, 2, 3), "")], T1)
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 2, 3), "")], T2)
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 3, 4, 5), "")], T3)
+    assert states(jobs) == {"Alpha|2": "closed", "Alpha|3": "open", "Alpha|4": "open", "Alpha|5": "open"}  # the older closed one went
+
+
+def test_jobs_ignore_garbage_in_the_old_file():
+    jobs = jr.update_jobs([None, "x", {"no": "key"}, {"key": "Alpha|9", "target": "Alpha", "state": "open"}],
+                          [(ALPHA, seen_open("Alpha", 1), "")], T1)
+    assert states(jobs) == {"Alpha|9": "closed", "Alpha|1": "open"}
+
+
+def test_run_writes_jobs_file_and_run_log(monkeypatch):
+    GitHub(monkeypatch)
+    no_heartbeat()
+    fake_sources(monkeypatch, {"Alpha": result_with(hit("Alpha", 1), deadline="2026-12-01"), "Beta": result_with()})
+    jr.run_radar(two_targets())
+    data = json.loads(jr.JOBS_PATH.read_text(encoding="utf-8"))
+    assert [(j["key"], j["state"], j["deadline"], j["target"]) for j in data["jobs"]] == [
+        (hit("Alpha", 1).key, "open", "2026-12-01", "Alpha")]
+    assert data["generated"] == status()["generated"]
+    assert status()["runs"] == [status()["generated"]]
+
+    fake_sources(monkeypatch, {"Alpha": result_with(), "Beta": requests.ConnectionError("down")})
+    jr.run_radar(two_targets())
+    data = json.loads(jr.JOBS_PATH.read_text(encoding="utf-8"))
+    assert data["jobs"][0]["state"] == "closed"
+    assert len(status()["runs"]) == 2
+
+
+def test_run_log_is_capped(monkeypatch):
+    monkeypatch.setattr(jr, "MAX_RUN_LOG", 3)
+    no_heartbeat()
+    fake_sources(monkeypatch, {"Alpha": result_with(), "Beta": result_with()})
+    for _ in range(5):
+        jr.run_radar(two_targets())
+    assert len(status()["runs"]) == 3
