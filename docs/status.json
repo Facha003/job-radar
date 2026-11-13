@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-13T14:50:47+00:00",
+  "generated": "2026-11-13T21:21:14+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -39,7 +39,7 @@
       "name": "Norwegian (Red Handling)",
       "url": "https://careers.norwegian.com/search/?q=&locationsearch=Gardermoen",
       "ok": false,
-      "consecutive_failures": 7,
+      "consecutive_failures": 8,
       "new_hits": 0,
       "total_seen": 1,
       "open": [
