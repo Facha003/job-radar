@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-14T01:39:27+00:00",
+  "generated": "2026-11-14T07:59:21+00:00",
   "channels": {
     "email": true,
     "push": false
@@ -7,6 +7,9 @@
   "targets": [
     {
       "name": "Vy karriere",
+      "id": "vy",
+      "label": "VY · KUNDEVEILEDER",
+      "sub": "OSLO / OSLO S / SKI",
       "url": "https://www.vy.no/vygruppen/karriere-i-vy/ledige-stillinger",
       "ok": true,
       "consecutive_failures": 0,
@@ -17,6 +20,9 @@
     },
     {
       "name": "ISS portal",
+      "id": "iss",
+      "label": "ISS · ASSISTANSE",
+      "sub": "OSLO LUFTHAVN / OSL",
       "url": "https://iss.attract.reachmee.com/jobs",
       "ok": true,
       "consecutive_failures": 0,
@@ -27,34 +33,88 @@
     },
     {
       "name": "SAS Ground Handling",
+      "id": "sas",
+      "label": "SAS GH · SERVICEMEDARBEIDER",
+      "sub": "INNSJEKK OG GATE / OSL",
       "url": "https://careers.sasgroup.net/search/?q=&locationsearch=Gardermoen",
-      "ok": false,
-      "consecutive_failures": 1,
+      "ok": true,
+      "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 0,
+      "listings": 2,
       "open": []
     },
     {
       "name": "Norwegian (Red Handling)",
+      "id": "norwegian",
+      "label": "NORWEGIAN · RED HANDLING",
+      "sub": "INNSJEKK OG GATE / OSL",
       "url": "https://careers.norwegian.com/search/?q=&locationsearch=Gardermoen",
-      "ok": false,
-      "consecutive_failures": 9,
+      "ok": true,
+      "consecutive_failures": 0,
       "new_hits": 0,
-      "total_seen": 1,
+      "total_seen": 2,
+      "listings": 17,
       "open": [
         {
+          "key": "Norwegian (Red Handling)|successfactors|3133",
           "text": "Lead Customer Service Agent, OSL",
-          "link": "https://careers.norwegian.com/job/Gardermoen-Lead-Customer-Service-Agent%2C-OSL-2060/1376887057/"
+          "title": "Lead Customer Service Agent, OSL",
+          "link": "https://careers.norwegian.com/job-invite/3133/",
+          "deadline": null
         }
       ]
     },
     {
       "name": "Widerøe Ground Handling",
+      "id": "wideroe",
+      "label": "WIDERØE GROUND HANDLING",
+      "sub": "INNSJEKK OG GATE / OSL · LUFTHANSA FRA OKT 2026",
       "url": "https://jobbiwideroe.no/karriere-i-wideroe/bakkepersonell/",
-      "ok": false,
-      "consecutive_failures": 1,
+      "ok": true,
+      "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 0,
+      "listings": 4,
+      "open": []
+    },
+    {
+      "name": "Avinor",
+      "id": "avinor",
+      "label": "AVINOR · OSLO LUFTHAVN",
+      "sub": "TERMINAL OG PASSASJERSERVICE / OSL",
+      "url": "https://om.avinor.no/karriere/jobbe-avinor/",
+      "ok": true,
+      "consecutive_failures": 0,
+      "new_hits": 0,
+      "total_seen": 0,
+      "listings": 19,
+      "open": []
+    },
+    {
+      "name": "Aviator",
+      "id": "aviator",
+      "label": "AVIATOR · GROUND HANDLING",
+      "sub": "INNSJEKK OG GATE / OSL",
+      "url": "https://careers.aviator.eu/jobs",
+      "ok": true,
+      "consecutive_failures": 0,
+      "new_hits": 0,
+      "total_seen": 0,
+      "listings": 3,
+      "open": []
+    },
+    {
+      "name": "NAV arbeidsplassen",
+      "id": "nav",
+      "label": "NAV · ALLE ARBEIDSGIVERE",
+      "sub": "GARDERMOEN / ULLENSAKER · FANGER DE ANDRE",
+      "url": "https://arbeidsplassen.nav.no/stillinger?q=gardermoen",
+      "ok": true,
+      "consecutive_failures": 0,
+      "new_hits": 0,
+      "total_seen": 0,
+      "listings": null,
       "open": []
     }
   ],
@@ -65,5 +125,9 @@
       "text": "Lead Customer Service Agent, OSL",
       "link": "https://careers.norwegian.com/job/Gardermoen-Lead-Customer-Service-Agent%2C-OSL-2060/1376887057/"
     }
-  ]
+  ],
+  "runs": [
+    "2026-11-14T07:59:21+00:00"
+  ],
+  "calendar": true
 }
