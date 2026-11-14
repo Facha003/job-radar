@@ -4,227 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#131417">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Jobbradar">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
 <title>JOBBRADAR · Oslo</title>
-<style>
-  :root{
-    --bg:#131417;
-    --panel:#1a1c20;
-    --panel2:#202329;
-    --line:#2c3038;
-    --amber:#ffb100;        /* avviksgul */
-    --amber-dim:#8a6200;
-    --ok:#3ec97e;
-    --fail:#ff5049;
-    --ink:#ece9e0;
-    --mut:#8f96a0;
-    --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
-    --body:"Avenir Next","Helvetica Neue","Segoe UI",system-ui,sans-serif;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html{-webkit-text-size-adjust:100%}
-  body{
-    background:var(--bg);color:var(--ink);font-family:var(--body);
-    font-size:16px;line-height:1.45;
-    padding-bottom:60px;
-  }
-  body::before{ /* avviksstripe */
-    content:"";display:block;height:4px;
-    background:repeating-linear-gradient(45deg,var(--amber) 0 14px,#0d0d0f 14px 28px);
-  }
-
-  /* ---------- header / stasjonsklokke ---------- */
-  header{
-    position:sticky;top:0;z-index:30;
-    background:rgba(19,20,23,.94);backdrop-filter:blur(6px);
-    border-bottom:1px solid var(--line);
-    padding:10px 14px 8px;
-  }
-  .hrow{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
-  .brand{font-family:var(--mono);font-weight:700;letter-spacing:.22em;color:var(--amber);font-size:15px}
-  .brand small{color:var(--mut);letter-spacing:.18em;font-weight:400}
-  #klokke{font-family:var(--mono);font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums}
-  .radarline{display:flex;align-items:center;gap:8px;margin-top:5px;font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--mut)}
-  .dot{width:8px;height:8px;border-radius:50%;background:var(--mut);flex:0 0 auto}
-  .dot.live{background:var(--ok);animation:pulse 1.6s ease-in-out infinite}
-  .dot.stale{background:var(--amber)}
-  .dot.off{background:var(--fail)}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-  nav{display:flex;gap:6px;overflow-x:auto;margin-top:8px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-  nav::-webkit-scrollbar{display:none}
-  nav a{
-    font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--mut);
-    text-decoration:none;border:1px solid var(--line);border-radius:3px;
-    padding:5px 9px;white-space:nowrap;
-  }
-  nav a:active{color:var(--amber);border-color:var(--amber)}
-
-  main{max-width:680px;margin:0 auto;padding:0 12px}
-
-  section{margin-top:26px;animation:inn .5s ease both}
-  section:nth-of-type(2){animation-delay:.05s}
-  section:nth-of-type(3){animation-delay:.1s}
-  section:nth-of-type(4){animation-delay:.15s}
-  section:nth-of-type(5){animation-delay:.2s}
-  section:nth-of-type(6){animation-delay:.25s}
-  @keyframes inn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-
-  h2{
-    font-family:var(--mono);font-size:12px;font-weight:700;
-    letter-spacing:.3em;color:var(--mut);
-    display:flex;align-items:center;gap:10px;margin-bottom:10px;
-  }
-  h2::before,h2::after{content:"";height:1px;background:var(--line);flex:1}
-
-  /* ---------- tavle ---------- */
-  .board{
-    background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;
-    background-image:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.14) 3px 4px);
-  }
-  .brow{border-bottom:1px solid var(--line);padding:12px 12px 12px}
-  .brow:last-child{border-bottom:none}
-  .brow{transition:background .3s, box-shadow .3s}
-  .brow.lit{background:rgba(255,177,0,.09);box-shadow:inset 4px 0 0 var(--amber), 0 0 22px rgba(255,177,0,.18)}
-  .brow.lit .dest{color:var(--amber)}
-  .ledig{display:none;margin-top:10px}
-  .brow.lit .ledig{display:block}
-  .ledig .lh{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.14em;color:var(--amber);margin-bottom:6px}
-  .ledig .lh .dot{background:var(--amber);animation:pulse 1.2s ease-in-out infinite}
-  .ledig a{display:block;background:var(--panel2);border:1px solid var(--amber-dim);border-radius:4px;padding:10px 12px;margin-bottom:6px;color:var(--ink);text-decoration:none;font-size:14.5px}
-  .ledig a::after{content:" ↗";color:var(--amber)}
-  #ledigtotal{color:var(--amber);font-weight:700}
-  .btop{display:flex;align-items:center;justify-content:space-between;gap:8px}
-  .dest{font-family:var(--mono);font-weight:700;font-size:17px;letter-spacing:.1em;color:var(--ink)}
-  .dest small{display:block;font-size:10.5px;font-weight:400;letter-spacing:.14em;color:var(--mut);margin-top:2px}
-  .flap{
-    font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.12em;
-    padding:6px 10px;border-radius:3px;border:1px solid var(--line);
-    background:linear-gradient(#26292f 49%, #1d2025 51%);color:var(--amber);
-    box-shadow:inset 0 0 0 1px rgba(0,0,0,.4);
-    appearance:none;-webkit-appearance:none;
-  }
-  select.flap{padding-right:22px;background-image:linear-gradient(#26292f 49%, #1d2025 51%);cursor:pointer}
-  .flap.apen{color:#0d0d0f;background:var(--amber);border-color:var(--amber)}
-  .flap.lukket{color:var(--mut)}
-  .flap.mulig{color:var(--ok)}
-  .bmeta{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:9px;font-family:var(--mono);font-size:11.5px;color:var(--mut);letter-spacing:.05em}
-  .bmeta b{color:var(--ink);font-weight:600}
-  .bmeta .warn{color:var(--fail)}
-  .bmeta .nytt{color:var(--amber)}
-  .bact{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
-  textarea.notat{
-    width:100%;margin-top:10px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;
-    color:var(--ink);font-family:var(--body);font-size:14px;padding:8px;min-height:38px;resize:vertical;
-  }
-  textarea.notat::placeholder{color:#5c626b}
-
-  .alerts{margin-top:10px}
-  .alert{
-    display:block;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);
-    border-radius:4px;padding:10px 12px;margin-bottom:8px;text-decoration:none;color:var(--ink);
-  }
-  .alert .at{font-family:var(--mono);font-size:10.5px;color:var(--mut);letter-spacing:.08em;display:block;margin-bottom:3px}
-  .tom{font-family:var(--mono);font-size:12px;color:var(--mut);letter-spacing:.06em;padding:10px 2px}
-
-  /* ---------- knapper ---------- */
-  .btn{
-    display:inline-flex;align-items:center;justify-content:center;gap:8px;
-    min-height:44px;padding:10px 14px;border-radius:4px;
-    border:1px solid var(--line);background:var(--panel2);color:var(--ink);
-    font-family:var(--mono);font-size:12.5px;letter-spacing:.08em;
-    text-decoration:none;cursor:pointer;user-select:none;
-  }
-  .btn:active{transform:translateY(1px)}
-  .btn.gul{background:var(--amber);border-color:var(--amber);color:#0d0d0f;font-weight:700}
-  .btn.smal{min-height:36px;padding:7px 11px;font-size:11.5px}
-  .btn .tag{font-size:9.5px;color:var(--fail);border:1px solid var(--fail);border-radius:2px;padding:1px 4px;letter-spacing:.1em}
-  .btnrad{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  @media(min-width:560px){.btnrad{grid-template-columns:1fr 1fr 1fr}}
-  .btnrad .btn{width:100%}
-
-  /* ---------- triage ---------- */
-  .triage{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}
-  .togg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .tg{
-    border:1px solid var(--line);border-radius:4px;background:var(--panel2);
-    padding:10px;cursor:pointer;user-select:none;min-height:56px;
-  }
-  .tg .pt{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--mut)}
-  .tg .lb{font-size:12.5px;color:var(--mut);margin-top:2px;line-height:1.3}
-  .tg.on{border-color:var(--amber)}
-  .tg.on .pt{color:var(--amber)}
-  .tg.on .lb{color:var(--ink)}
-  .tg.stopp.on{border-color:var(--fail)}
-  .tg.stopp.on .pt{color:var(--fail)}
-  .verdict{
-    margin-top:12px;border-radius:4px;padding:14px 12px;text-align:center;
-    font-family:var(--mono);letter-spacing:.14em;border:1px dashed var(--line);
-  }
-  .verdict .vs{font-size:22px;font-weight:700}
-  .verdict .vt{font-size:11.5px;margin-top:5px;letter-spacing:.06em}
-  .verdict.hoy{background:var(--amber);color:#0d0d0f;border-color:var(--amber)}
-  .verdict.med{color:var(--amber);border-color:var(--amber)}
-  .verdict.ign{color:var(--mut)}
-  .stoppord{font-size:12px;color:var(--mut);margin-top:10px;line-height:1.5}
-  .stoppord b{color:var(--ink);font-weight:600}
-
-  /* ---------- rutine ---------- */
-  .liste{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
-  .liste h3{
-    font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;color:var(--mut);
-    padding:9px 12px;border-bottom:1px solid var(--line);background:var(--panel2);
-    display:flex;justify-content:space-between;font-weight:600;
-  }
-  .li{
-    display:flex;align-items:center;gap:12px;padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;
-  }
-  .li:last-child{border-bottom:none}
-  .box{
-    width:20px;height:20px;flex:0 0 auto;border:1px solid var(--mut);border-radius:3px;
-    font-family:var(--mono);color:var(--amber);font-size:14px;line-height:18px;text-align:center;
-  }
-  .li.gjort .box{border-color:var(--amber)}
-  .li.gjort span{color:var(--mut);text-decoration:line-through}
-  .li span{font-size:14.5px}
-
-  /* ---------- utrykning ---------- */
-  ol.steg{list-style:none;counter-reset:s;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
-  ol.steg li{counter-increment:s;display:flex;gap:12px;padding:11px 12px;border-bottom:1px solid var(--line);font-size:14.5px}
-  ol.steg li:last-child{border-bottom:none}
-  ol.steg li::before{
-    content:counter(s,decimal-leading-zero);font-family:var(--mono);color:var(--amber);
-    font-size:12px;font-weight:700;padding-top:2px;letter-spacing:.05em;
-  }
-  ol.steg b{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--mut);display:block}
-  .kopi{margin-top:12px;display:grid;gap:8px}
-
-  /* ---------- vinduer ---------- */
-  .vind{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
-  .vrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line)}
-  .vrow:last-child{border-bottom:none}
-  .vrow .vn{font-size:14px}
-  .vrow .vn small{display:block;color:var(--mut);font-size:12px;margin-top:1px}
-  .vrow .vd{font-family:var(--mono);font-size:12px;color:var(--amber);white-space:nowrap;letter-spacing:.05em}
-
-  .fotnote{font-size:12px;color:var(--mut);margin-top:10px;line-height:1.5}
-  .fotnote code{font-family:var(--mono);color:var(--ink);font-size:11.5px}
-
-  #lagringsvarsel{
-    display:none;margin:14px 12px 0;max-width:656px;margin-inline:auto;
-    border:1px dashed var(--amber-dim);color:var(--amber);border-radius:4px;
-    font-family:var(--mono);font-size:11.5px;padding:9px 11px;letter-spacing:.04em;
-  }
-
-  footer{
-    margin-top:34px;padding:16px 14px;border-top:1px solid var(--line);
-    font-family:var(--mono);font-size:10.5px;color:var(--mut);letter-spacing:.12em;text-align:center;
-  }
-  @media(prefers-reduced-motion:reduce){
-    *{animation:none!important;transition:none!important}
-  }
-  :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-</style>
+<link rel="stylesheet" href="app.css">
 </head>
 <body>
 
@@ -234,10 +22,9 @@
     <div id="klokke">--:--:--</div>
   </div>
   <div class="radarline"><span class="dot off" id="rdot"></span><span id="rtekst">RADAR: SJEKKER…</span></div>
-  <div class="radarline" id="lediglinje" style="display:none"><span class="dot" style="background:var(--amber);animation:pulse 1.2s ease-in-out infinite"></span><span id="ledigtotal"></span></div>
-  <div class="radarline" id="kanallinje" style="display:none"><span class="dot" id="kdot"></span><span id="ktekst"></span></div>
+  <div class="radarline" id="lediglinje" hidden><span class="dot gul"></span><span id="ledigtotal"></span></div>
   <nav>
-    <a href="#tavle">TAVLE</a><a href="#vinduer">VINDUER</a>
+    <a href="#naa">NÅ</a><a href="#soknader">SØKNADER</a><a href="#tavle">TAVLE</a><a href="#vinduer">VINDUER</a><a href="#radar">RADAR</a><a href="#kopi">KOPI</a>
   </nav>
 </header>
 
@@ -245,274 +32,75 @@
 
 <main>
 
-  <!-- ================= TAVLE ================= -->
+  <!-- ================= NÅ: stillingene du vil ha, som er ute akkurat nå ================= -->
+  <section id="naa">
+    <h2>LEDIG NÅ</h2>
+    <div class="chips" id="filter"></div>
+    <div id="jobber"><div class="tom">LASTER…</div></div>
+  </section>
+
+  <!-- ================= SØKNADER: det du har satt i gang ================= -->
+  <section id="soknader">
+    <h2>SØKNADER</h2>
+    <div class="teller" id="teller"></div>
+    <div id="mine"></div>
+    <p class="fotnote">Status og notater ligger bare i denne nettleseren. Ingen andre ser hva du har søkt på. Ta en sikkerhetskopi nederst før du bytter telefon.</p>
+  </section>
+
+  <!-- ================= TAVLE: arbeidsgiverne radaren følger ================= -->
   <section id="tavle">
     <h2>TAVLE</h2>
-    <div class="board">
-
-      <div class="brow" data-maal="vy">
-        <div class="btop">
-          <div class="dest">VY · KUNDEVEILEDER<small>OSLO / OSLO S / SKI</small></div>
-          <select class="flap" data-felt="status" aria-label="Status Vy">
-            <option value="UKJENT">UKJENT</option><option value="ÅPEN">ÅPEN</option>
-            <option value="MULIG">MULIG</option><option value="LUKKET">LUKKET</option>
-          </select>
-        </div>
-        <div class="bmeta">
-          <span>RADAR: <b data-auto="radar">ingen data</b></span>
-          <span>NYE TREFF: <b data-auto="nytt">0</b></span>
-          <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
-          <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
-        </div>
-        <div class="ledig"><div class="lh"><span class="dot"></span><span class="lt">LEDIG NÅ</span></div><div class="ll"></div></div>
-        <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: Vy tog filteret sjekket, den ene utlysningen var …"></textarea>
-        <div class="bact">
-          <button class="btn smal gul" data-stemple>Stemple sjekket nå</button>
-          <a class="btn smal" href="https://www.vy.no/vygruppen/karriere-i-vy/ledige-stillinger" target="_blank" rel="noopener">Åpne karrieresiden</a>
-        </div>
-      </div>
-
-      <div class="brow" data-maal="iss">
-        <div class="btop">
-          <div class="dest">ISS · ASSISTANSE<small>OSLO LUFTHAVN / OSL</small></div>
-          <select class="flap" data-felt="status" aria-label="Status ISS">
-            <option value="UKJENT">UKJENT</option><option value="ÅPEN">ÅPEN</option>
-            <option value="MULIG">MULIG</option><option value="LUKKET">LUKKET</option>
-          </select>
-        </div>
-        <div class="bmeta">
-          <span>RADAR: <b data-auto="radar">ingen data</b></span>
-          <span>NYE TREFF: <b data-auto="nytt">0</b></span>
-          <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
-          <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
-        </div>
-        <div class="ledig"><div class="lh"><span class="dot"></span><span class="lt">LEDIG NÅ</span></div><div class="ll"></div></div>
-        <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: ny portal funnet via Finn annonse, åpen søknad sendt …"></textarea>
-        <div class="bact">
-          <button class="btn smal gul" data-stemple>Stemple sjekket nå</button>
-          <a class="btn smal" href="https://iss.attract.reachmee.com/jobs" target="_blank" rel="noopener">Åpne portalen</a>
-        </div>
-      </div>
-
-      <div class="brow" data-maal="sas">
-        <div class="btop">
-          <div class="dest">SAS GH · SERVICEMEDARBEIDER<small>INNSJEKK OG GATE / OSL</small></div>
-          <select class="flap" data-felt="status" aria-label="Status SAS">
-            <option value="UKJENT">UKJENT</option><option value="ÅPEN">ÅPEN</option>
-            <option value="MULIG">MULIG</option><option value="LUKKET">LUKKET</option>
-          </select>
-        </div>
-        <div class="bmeta">
-          <span>RADAR: <b data-auto="radar">ingen data</b></span>
-          <span>NYE TREFF: <b data-auto="nytt">0</b></span>
-          <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
-          <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
-        </div>
-        <div class="ledig"><div class="lh"><span class="dot"></span><span class="lt">LEDIG NÅ</span></div><div class="ll"></div></div>
-        <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: melding sendt til leder om retur, svar ventes …"></textarea>
-        <div class="bact">
-          <button class="btn smal gul" data-stemple>Stemple sjekket nå</button>
-          <a class="btn smal" href="https://careers.sasgroup.net/search/?q=&locationsearch=Gardermoen" target="_blank" rel="noopener">Åpne SAS karriere</a>
-        </div>
-      </div>
-
-      <div class="brow" data-maal="norwegian">
-        <div class="btop">
-          <div class="dest">NORWEGIAN · RED HANDLING<small>INNSJEKK OG GATE / OSL</small></div>
-          <select class="flap" data-felt="status" aria-label="Status norwegian">
-            <option value="UKJENT">UKJENT</option><option value="ÅPEN">ÅPEN</option>
-            <option value="MULIG">MULIG</option><option value="LUKKET">LUKKET</option>
-          </select>
-        </div>
-        <div class="bmeta">
-          <span>RADAR: <b data-auto="radar">ingen data</b></span>
-          <span>NYE TREFF: <b data-auto="nytt">0</b></span>
-          <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
-          <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
-        </div>
-        <div class="ledig"><div class="lh"><span class="dot"></span><span class="lt">LEDIG NÅ</span></div><div class="ll"></div></div>
-        <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: CSA stilling utlyst, søkt …"></textarea>
-        <div class="bact">
-          <button class="btn smal gul" data-stemple>Stemple sjekket nå</button>
-          <a class="btn smal" href="https://careers.norwegian.com/search/?q=&locationsearch=Gardermoen" target="_blank" rel="noopener">Åpne Norwegian karriere</a>
-        </div>
-      </div>
-
-      <div class="brow" data-maal="wideroe">
-        <div class="btop">
-          <div class="dest">WIDERØE GROUND HANDLING<small>INNSJEKK OG GATE / OSL · LUFTHANSA FRA OKT 2026</small></div>
-          <select class="flap" data-felt="status" aria-label="Status wideroe">
-            <option value="UKJENT">UKJENT</option><option value="ÅPEN">ÅPEN</option>
-            <option value="MULIG">MULIG</option><option value="LUKKET">LUKKET</option>
-          </select>
-        </div>
-        <div class="bmeta">
-          <span>RADAR: <b data-auto="radar">ingen data</b></span>
-          <span>NYE TREFF: <b data-auto="nytt">0</b></span>
-          <span>ANNONSER NÅ: <b data-auto="ann">–</b></span>
-          <span>SIST STEMPLET: <b data-felt="sist">aldri</b></span>
-        </div>
-        <div class="ledig"><div class="lh"><span class="dot"></span><span class="lt">LEDIG NÅ</span></div><div class="ll"></div></div>
-        <textarea class="notat" data-felt="notat" placeholder="Notat. F.eks: flyekspeditør OSL utlyst på Jobbnorge …"></textarea>
-        <div class="bact">
-          <button class="btn smal gul" data-stemple>Stemple sjekket nå</button>
-          <a class="btn smal" href="https://jobbiwideroe.no/karriere-i-wideroe/bakkepersonell/" target="_blank" rel="noopener">Åpne Widerøe stillinger</a>
-        </div>
-      </div>
-
-    </div>
-
-    <div class="alerts" id="alerts"><div class="tom">INGEN RADARTREFF LASTET.</div></div>
-    <div class="bact" style="margin-top:10px">
+    <div class="board" id="board"><div class="tom" style="padding:12px">LASTER…</div></div>
+    <div class="bact">
       <button class="btn smal" id="oppdater">Last radarstatus på nytt</button>
       <a class="btn smal" href="https://github.com/Facha003/job-radar/actions/workflows/radar_check.yml" target="_blank" rel="noopener">Kjør sjekk nå</a>
     </div>
-    <p class="fotnote">Radaren sjekker automatisk, men GitHub kjører den i praksis hver 4. til 8. time. Når et vindu åpner seg: trykk Kjør sjekk nå, så Run workflow. Status, notat og stempel lagres i nettleseren din. Bare stillinger på Gardermoen havner her.</p>
+    <p class="fotnote">Radaren ber GitHub om en sjekk hvert 30. minutt, men GitHub hopper over mange av dem, så det kan gå timer mellom. Når et vindu åpner seg: trykk Kjør sjekk nå, så Run workflow.</p>
   </section>
 
+  <!-- ================= VINDUER ================= -->
   <section id="vinduer">
     <h2>VINDUER</h2>
-    <div class="vind">
-      <div class="vrow"><div class="vn">ISS vikarbatch<small>historisk utlyst rundt desember og januar</small></div><div class="vd" data-frist="2026-12-01">–</div></div>
-      <div class="vrow"><div class="vn">SAS GH sommerbatch, servicemedarbeider<small>sist utlyst 28. desember, frist slutten av januar og midten av februar</small></div><div class="vd" data-frist="2026-12-28">–</div></div>
-      <div class="vrow"><div class="vn">Vy hovedbatch for sommer 2027<small>vinter og tidlig vår</small></div><div class="vd" data-frist="2027-02-01">–</div></div>
-      <div class="vrow"><div class="vn">Widerøe GH, OSL<small>tok over Lufthansa Group på OSL 1. oktober 2026, nye kontrakter betyr ofte nye folk. Ingen fast batch kjent ennå</small></div><div class="vd">LØPENDE</div></div>
-      <div class="vrow"><div class="vn">Norwegian / Red Handling, OSL<small>egen handling på OSL siden mars 2023. Ingen fast batch kjent ennå</small></div><div class="vd">LØPENDE</div></div>
-      <div class="vrow"><div class="vn">ISS tilkalling<small>dukker opp hele året, fortløpende vurdering, fart teller</small></div><div class="vd">LØPENDE</div></div>
+    <div class="rader">
+      <div class="rad"><div class="rn">ISS vikarbatch<small>historisk utlyst rundt desember og januar</small></div><div class="rd" data-frist="2026-12-01">–</div></div>
+      <div class="rad"><div class="rn">SAS GH sommerbatch, servicemedarbeider<small>sist utlyst 28. desember, frist slutten av januar og midten av februar</small></div><div class="rd" data-frist="2026-12-28">–</div></div>
+      <div class="rad"><div class="rn">Vy hovedbatch for sommer 2027<small>vinter og tidlig vår</small></div><div class="rd" data-frist="2027-02-01">–</div></div>
+      <div class="rad"><div class="rn">Widerøe GH, OSL<small>tok over Lufthansa Group på OSL 1. oktober 2026, nye kontrakter betyr ofte nye folk. Ingen fast batch kjent ennå</small></div><div class="rd">LØPENDE</div></div>
+      <div class="rad"><div class="rn">Norwegian / Red Handling, OSL<small>egen handling på OSL siden mars 2023. Ingen fast batch kjent ennå</small></div><div class="rd">LØPENDE</div></div>
+      <div class="rad"><div class="rn">ISS tilkalling<small>dukker opp hele året, fortløpende vurdering, fart teller</small></div><div class="rd">LØPENDE</div></div>
     </div>
     <p class="fotnote">Menneskekanalen slår alle vinduene: tidligere leder hos SGH, folk du kjenner på OSL, kundeveileder i gul vest på Oslo S. Navn først, søknad etterpå.</p>
+    <h3>HISTORIKK · UTLYSNINGER SOM ER LUKKET</h3>
+    <div id="historikk"></div>
+  </section>
+
+  <!-- ================= RADAR: virker maskinen? ================= -->
+  <section id="radar">
+    <h2>RADAR</h2>
+    <div class="rader" id="helse"></div>
+    <h3>SISTE VARSLER</h3>
+    <div id="alerts"><div class="tom">INGEN RADARTREFF LASTET.</div></div>
+  </section>
+
+  <!-- ================= SIKKERHETSKOPI ================= -->
+  <section id="kopi">
+    <h2>SIKKERHETSKOPI</h2>
+    <div class="bact" style="margin-top:0">
+      <button class="btn smal gul" id="eksport">Last ned kopi</button>
+      <button class="btn smal" id="eksporttekst">Vis som tekst</button>
+      <button class="btn smal" id="importfil">Hent fra fil</button>
+      <button class="btn smal" id="importtekst">Hent fra teksten under</button>
+      <input type="file" id="filvelger" accept="application/json,.json" hidden>
+    </div>
+    <textarea class="kopi" id="kopitekst" aria-label="Sikkerhetskopi som tekst" placeholder="Lim inn en kopi her for å hente den inn, eller trykk Vis som tekst for å kopiere herfra."></textarea>
+    <div id="kopimelding" role="status"></div>
+    <p class="fotnote">Kopien inneholder status, notater og stempler fra denne nettleseren. Bruk den til å flytte alt til en ny telefon, eller fra mobil til PC.</p>
   </section>
 
 </main>
 
-<footer>JOBBRADAR · BYGD 09.07.2026 · OPPDATERT 04.11.2026 · MASKINEN VARSLER, DU SØKER</footer>
+<footer>JOBBRADAR · BYGD 09.07.2026 · VERSJON 4 · MASKINEN VARSLER, DU SØKER</footer>
 
-<script>
-/* ---------- trygg lagring: localStorage der det finnes, minne ellers ---------- */
-const store=(()=>{
-  let ok=true, mem={};
-  try{ localStorage.setItem("__t","1"); localStorage.removeItem("__t"); }
-  catch(e){ ok=false; }
-  return {
-    ok,
-    get(k,f){ try{ if(ok){ const v=localStorage.getItem(k); return v===null?f:JSON.parse(v); } }catch(e){} return (k in mem)?mem[k]:f; },
-    set(k,v){ try{ if(ok){ localStorage.setItem(k,JSON.stringify(v)); return; } }catch(e){} mem[k]=v; }
-  };
-})();
-if(!store.ok) document.getElementById("lagringsvarsel").style.display="block";
-
-/* ---------- klokke ---------- */
-const kl=document.getElementById("klokke");
-function tikk(){ kl.textContent=new Date().toLocaleTimeString("nb-NO",{hour:"2-digit",minute:"2-digit",second:"2-digit"}); }
-tikk(); setInterval(tikk,1000);
-
-/* ---------- radarstatus fra status.json ---------- */
-const rdot=document.getElementById("rdot"), rtekst=document.getElementById("rtekst");
-const alertsEl=document.getElementById("alerts");
-const kanallinje=document.getElementById("kanallinje"), kdot=document.getElementById("kdot"), ktekst=document.getElementById("ktekst");
-
-function visKanaler(ch){
-  if(!ch){ kanallinje.style.display="none"; return; }
-  const paa=ch.email||ch.push;
-  kanallinje.style.display="flex";
-  kdot.className="dot "+(paa?"live":"off");
-  ktekst.textContent="VARSLING: EPOST "+(ch.email?"PÅ":"AV")+" · PUSH "+(ch.push?"PÅ":"AV")+(paa?"":" · INGEN KANAL AKTIV");
-}
-
-/* radartreff er skrapt fra eksterne sider — aldri rå HTML inn i tavla */
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const trygLenke=u=>/^https?:\/\//i.test(u)?esc(u):"#";
-
-function relTid(iso){
-  const m=Math.round((Date.now()-Date.parse(iso))/60000);
-  if(isNaN(m)) return "ukjent tid";
-  if(m<1) return "nå nettopp";
-  if(m<60) return m+" min siden";
-  const t=Math.round(m/60);
-  if(t<48) return t+" t siden";
-  return Math.round(t/24)+" d siden";
-}
-
-let ledigSum=0;
-function visMaalAuto(navnRegex,data){
-  const rad=[...document.querySelectorAll(".brow")].find(r=>navnRegex.test(r.dataset.maal));
-  if(!rad) return;
-  const t=(data.targets||[]).find(x=>navnRegex.test(x.name||""));
-  const rEl=rad.querySelector('[data-auto="radar"]'), nEl=rad.querySelector('[data-auto="nytt"]');
-  if(!t){ rEl.textContent="ikke i status"; return; }
-  if(t.ok){ rEl.textContent="OK"; rEl.classList.remove("warn"); }
-  else{ rEl.textContent="FEIL x"+(t.consecutive_failures||1); rEl.classList.add("warn"); }
-  nEl.textContent=t.new_hits||0;
-  const open=t.open||[];
-  rad.classList.toggle("lit",open.length>0);
-  rad.querySelector(".lt").textContent = open.length===1 ? "LEDIG NÅ · 1 STILLING" : "LEDIG NÅ · "+open.length+" STILLINGER";
-  rad.querySelector(".ll").innerHTML = open.map(o=>`<a href="${trygLenke(o.link)}" target="_blank" rel="noopener">${esc(o.text)}</a>`).join("");
-  ledigSum += open.length;
-  const aEl=rad.querySelector('[data-auto="ann"]');
-  if(aEl) aEl.textContent=(t.listings??"–");
-  if((t.new_hits||0)>0) nEl.classList.add("nytt");
-}
-
-async function lastStatus(){
-  rtekst.textContent="RADAR: SJEKKER…";
-  try{
-    const r=await fetch("./status.json",{cache:"no-store"});
-    if(!r.ok) throw 0;
-    const d=await r.json();
-    const min=Math.round((Date.now()-Date.parse(d.generated))/60000);
-    /* GitHub runs the free schedule every 4 to 8 hours in practice, so only
-       warn when a check is clearly overdue (12 h), not after 45 min */
-    if(min<=720){ rdot.className="dot live"; rtekst.textContent="RADAR: SIST SJEKKET "+relTid(d.generated).toUpperCase(); }
-    else{ rdot.className="dot stale"; rtekst.textContent="RADAR: IKKE SJEKKET PÅ "+relTid(d.generated).replace(" siden","").toUpperCase()+" · TRYKK KJØR SJEKK NÅ"; }
-    visKanaler(d.channels);
-    ledigSum=0;
-    visMaalAuto(/vy/i,d); visMaalAuto(/iss/i,d); visMaalAuto(/sas/i,d);
-    visMaalAuto(/norwegian/i,d); visMaalAuto(/wider/i,d);
-    const ll=document.getElementById("lediglinje");
-    ll.style.display = ledigSum ? "flex" : "none";
-    document.getElementById("ledigtotal").textContent = ledigSum===1 ? "1 STILLING DU VIL HA ER LEDIG NÅ" : ledigSum+" STILLINGER DU VIL HA ER LEDIG NÅ";
-    const al=(d.recent_alerts||[]).slice(0,8);
-    alertsEl.innerHTML = al.length
-      ? al.map(a=>`<a class="alert" href="${trygLenke(a.link)}" target="_blank" rel="noopener"><span class="at">${esc((a.target||"").toUpperCase())} · ${relTid(a.time).toUpperCase()}</span>${esc(a.text)}</a>`).join("")
-      : `<div class="tom">INGEN TREFF I RADARLOGGEN. STILLE ER OGSÅ ET SVAR.</div>`;
-  }catch(e){
-    rdot.className="dot off";
-    rtekst.textContent="RADAR: FRAKOBLET · SIDEN VIRKER, MEN UTEN SANNTID";
-    visKanaler(null);
-    alertsEl.innerHTML=`<div class="tom">FANT IKKE status.json. KJØR SIDEN PÅ GITHUB PAGES SAMMEN MED RADAREN FOR SANNTID.</div>`;
-  }
-}
-document.getElementById("oppdater").addEventListener("click",lastStatus);
-lastStatus();
-
-/* ---------- manuelt lag på tavla ---------- */
-function fargFlap(sel){
-  sel.classList.remove("apen","lukket","mulig");
-  if(sel.value==="ÅPEN") sel.classList.add("apen");
-  if(sel.value==="LUKKET") sel.classList.add("lukket");
-  if(sel.value==="MULIG") sel.classList.add("mulig");
-}
-document.querySelectorAll(".brow").forEach(rad=>{
-  const key="radar.maal."+rad.dataset.maal;
-  const d=store.get(key,{status:"UKJENT",notat:"",sist:"aldri"});
-  const sel=rad.querySelector('[data-felt="status"]');
-  const notat=rad.querySelector('[data-felt="notat"]');
-  const sist=rad.querySelector('[data-felt="sist"]');
-  sel.value=d.status; fargFlap(sel); notat.value=d.notat; sist.textContent=d.sist;
-  const lagre=()=>store.set(key,{status:sel.value,notat:notat.value,sist:sist.textContent});
-  sel.addEventListener("change",()=>{fargFlap(sel);lagre();});
-  notat.addEventListener("input",lagre);
-  rad.querySelector("[data-stemple]").addEventListener("click",()=>{
-    sist.textContent=new Date().toLocaleString("nb-NO",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
-    lagre();
-  });
-});
-
-/* ---------- vinduer nedtelling ---------- */
-document.querySelectorAll("[data-frist]").forEach(el=>{
-  const d=Math.ceil((Date.parse(el.dataset.frist)-Date.now())/86400000);
-  el.textContent = d>1 ? "OM "+d+" DAGER" : (d>=-90 ? "NÅ" : "PASSERT");
-});
-</script>
+<script src="app.js"></script>
 </body>
 </html>
