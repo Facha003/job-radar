@@ -136,7 +136,8 @@ function visJobber() {
     ? brikker.map(s => `<button class="chip${s === valgt ? " on" : ""}" data-filter="${s}">${s}<b>${antall[s]}</b></button>`).join("")
     : "";
 
-  const rang = j => (FERDIG.includes(jobbStatus(j.key)) ? 1 : 0);
+  /* avslåtte nederst, og over dem stillinger der fristen er ute */
+  const rang = j => (FERDIG.includes(jobbStatus(j.key)) ? 2 : (dagerTil(j.deadline) ?? 0) < 0 ? 1 : 0);
   const liste = aapne
     .filter(j => valgt === "ALLE" || jobbStatus(j.key) === valgt)
     .sort((a, b) => rang(a) - rang(b)
@@ -147,7 +148,7 @@ function visJobber() {
     const s = jobbStatus(j.key), f = fristInfo(j.deadline), d = jobbLagret(j.key);
     const dempet = FERDIG.includes(s);
     return `<div class="jobb${f.haster && !dempet && s !== "SØKT" ? " haster" : ""}${dempet ? " dempet" : ""}">
-      <div class="jtop"><span class="frist ${f.klasse}">${esc(f.tekst)}</span>${statusVelger(j.key, s)}</div>
+      <div class="jtop"><span class="frist ${f.klasse}"${dagerTil(j.deadline) === 0 ? ` data-siste="${esc(j.deadline)}"` : ""}>${esc(f.tekst)}</span>${statusVelger(j.key, s)}</div>
       <a class="jtittel" href="${trygLenke(j.link)}" target="_blank" rel="noopener">${esc(j.title || j.text)}</a>
       <div class="jmeta"><b>${esc(maalNavn(j.target))}</b> · SETT FØRSTE GANG ${esc(kortDato(j.first_seen))} (${esc(relTid(j.first_seen).toUpperCase())})</div>
       <textarea class="notat" data-jnotat="${esc(j.key)}" placeholder="Notat. F.eks: søkt 14.11, ringte leder, venter svar …">${esc(d ? d.notat : "")}</textarea>
@@ -215,6 +216,7 @@ function visTavle() {
         <span>ANNONSER NÅ: <b>${esc(t.listings ?? "–")}</b></span>
         <span>SIST STEMPLET: <b data-sist>${esc(d.sist)}</b></span>
       </div>
+      <div class="trend" data-trend="${esc(id)}"></div>
       ${ledig}
       <textarea class="notat" data-mnotat placeholder="Notat om arbeidsgiveren. F.eks: åpen søknad sendt, kontaktperson …">${esc(d.notat)}</textarea>
       <div class="bact">
@@ -272,7 +274,7 @@ function visHelse() {
     : `<div class="tom">INGEN TREFF I RADARLOGGEN.</div>`;
 }
 
-function visAlt() { visJobber(); visSoknader(); visTavle(); visHistorikk(); visHelse(); }
+function visAlt() { visJobber(); visSoknader(); visTavle(); visHistorikk(); visHelse(); if (window.display) display.render(); }
 
 /* ---------- hent status.json og jobs.json ---------- */
 async function hent(fil) {
@@ -290,7 +292,7 @@ function jobberFraStatus(st) {
   return ut;
 }
 
-let laster = false;
+let laster = false, sistGenerert = null;
 async function lastStatus(stille) {
   if (laster) return;
   /* ikke tegn om mens du skriver i et notat eller har en velger åpen */
@@ -313,6 +315,10 @@ async function lastStatus(stille) {
     rdot.className = "dot off";
     rtekst.textContent = "RADAR: FRAKOBLET · SIDEN VIRKER, MEN UTEN SANNTID";
   } finally { laster = false; }
+  /* display.js viser "NY DATA" når radaren har kjørt siden forrige henting */
+  const ny = STATUS ? STATUS.generated : null;
+  window.radarEndret = sistGenerert !== null && ny !== null && ny !== sistGenerert;
+  if (ny) sistGenerert = ny;
   visAlt();
   if (!STATUS) $("jobber").innerHTML = `<div class="tom">FANT IKKE status.json. KJØR SIDEN PÅ GITHUB PAGES SAMMEN MED RADAREN FOR SANNTID.</div>`;
 }
@@ -331,6 +337,7 @@ document.addEventListener("change", e => {
     lagreJobb(finnJobb(el.dataset.jstatus), { status: el.value });
     el.blur();
     visJobber(); visSoknader(); visHistorikk();
+    if (window.display) display.render();
   } else if (el.dataset.mstatus !== undefined) {
     lagreMaal(el.closest(".brow"));
     el.className = "flap " + (MAAL_FARGE[el.value] || "");

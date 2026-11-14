@@ -24,13 +24,25 @@
   <div class="radarline"><span class="dot off" id="rdot"></span><span id="rtekst">RADAR: SJEKKER…</span></div>
   <div class="radarline" id="lediglinje" hidden><span class="dot gul"></span><span id="ledigtotal"></span></div>
   <nav>
-    <a href="#naa">NÅ</a><a href="#soknader">SØKNADER</a><a href="#tavle">TAVLE</a><a href="#vinduer">VINDUER</a><a href="#radar">RADAR</a><a href="#kopi">KOPI</a>
+    <a href="#skjerm">SKJERM</a><a href="#naa">NÅ</a><a href="#soknader">SØKNADER</a><a href="#logg">LOGG</a><a href="#tavle">TAVLE</a><a href="#vinduer">VINDUER</a><a href="#radar">RADAR</a><a href="#kopi">KOPI</a><a href="?tv" id="tvknapp">TV-MODUS</a>
   </nav>
 </header>
 
 <div id="lagringsvarsel">LAGRING UTILGJENGELIG I DENNE VISNINGEN. ÅPNE SIDEN LOKALT ELLER PÅ GITHUB PAGES FOR VARIG LAGRING.</div>
 
 <main>
+
+  <!-- ================= SKJERM: radarskjerm og avgangstavle ================= -->
+  <section id="skjerm">
+    <div class="skjerm">
+      <div class="scope" id="scope"></div>
+      <div class="tvpanel" id="tvpanel" data-vis="avganger">
+        <div class="rute" data-rute="avganger"><h2>AVGANGER</h2><div class="flapboard" id="avganger"></div></div>
+        <div class="rute" data-rute="logg"><h2>LOGG</h2><div id="tvlogg"></div></div>
+        <div class="rute" data-rute="trender"><h2>TRENDER</h2><div id="tvtrender"></div></div>
+      </div>
+    </div>
+  </section>
 
   <!-- ================= NÅ: stillingene du vil ha, som er ute akkurat nå ================= -->
   <section id="naa">
@@ -45,6 +57,12 @@
     <div class="teller" id="teller"></div>
     <div id="mine"></div>
     <p class="fotnote">Status og notater ligger bare i denne nettleseren. Ingen andre ser hva du har søkt på. Ta en sikkerhetskopi nederst før du bytter telefon.</p>
+  </section>
+
+  <!-- ================= LOGG: det radaren faktisk har gjort ================= -->
+  <section id="logg">
+    <h2>LOGG</h2>
+    <div id="loggliste"><div class="tom">LASTER…</div></div>
   </section>
 
   <!-- ================= TAVLE: arbeidsgiverne radaren følger ================= -->
@@ -99,8 +117,12 @@
 
 </main>
 
-<footer>JOBBRADAR · BYGD 09.07.2026 · VERSJON 4 · MASKINEN VARSLER, DU SØKER</footer>
+<footer>JOBBRADAR · BYGD 09.07.2026 · VERSJON 5 · MASKINEN VARSLER, DU SØKER</footer>
+
+<div id="toast" role="status"></div>
+<div id="ticker" hidden></div>
 
 <script src="app.js"></script>
+<script src="display.js"></script>
 </body>
 </html>
