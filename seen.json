@@ -11,9 +11,9 @@
   "fail": {
     "Vy karriere": 0,
     "ISS portal": 0,
-    "SAS Ground Handling": 0,
-    "Norwegian (Red Handling)": 8,
-    "Widerøe Ground Handling": 0
+    "SAS Ground Handling": 1,
+    "Norwegian (Red Handling)": 9,
+    "Widerøe Ground Handling": 1
   },
   "alerts": [
     {
