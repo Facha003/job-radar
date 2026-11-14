@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-14T19:52:44+00:00",
+  "generated": "2026-11-14T22:14:32+00:00",
   "channels": {
     "email": true,
     "push": true
@@ -129,7 +129,40 @@
   "runs": [
     "2026-11-14T07:59:21+00:00",
     "2026-11-14T14:59:06+00:00",
-    "2026-11-14T19:52:44+00:00"
+    "2026-11-14T19:52:44+00:00",
+    "2026-11-14T22:14:32+00:00"
   ],
-  "calendar": true
+  "calendar": true,
+  "events": [
+    {
+      "t": "2026-11-14T22:14:32+00:00",
+      "type": "check",
+      "target": "",
+      "text": "8 kilder sjekket, 1 ledig",
+      "link": ""
+    },
+    {
+      "t": "2026-11-06T11:24:25+00:00",
+      "type": "new",
+      "target": "Norwegian (Red Handling)",
+      "text": "Lead Customer Service Agent, OSL",
+      "link": "https://careers.norwegian.com/job/Gardermoen-Lead-Customer-Service-Agent%2C-OSL-2060/1376887057/"
+    }
+  ],
+  "history": [
+    {
+      "t": "2026-11-14T22:14:32+00:00",
+      "n": {
+        "vy": 23,
+        "iss": 10,
+        "sas": 2,
+        "norwegian": 17,
+        "wideroe": 4,
+        "avinor": 19,
+        "aviator": 3,
+        "nav": null
+      },
+      "fail": []
+    }
+  ]
 }
