@@ -18,6 +18,7 @@ job-radar/
   docs/
     index.html            (tavla: selve siden)
     app.css, app.js       (utseende og oppførsel)
+    display.js            (alt som beveger seg: radarskjerm, avgangstavle, logg, TV-modus)
     manifest.webmanifest, sw.js, icon-*.png   (gjør siden til en app på hjemskjermen)
     status.json           (lages automatisk av skriptet)
     jobs.json             (lages automatisk: alle ønskede stillinger radaren har sett)
@@ -82,6 +83,10 @@ Mottaker er secret `ALERT_EMAIL` i GitHub (feltet `email` i config.json står to
 * Forhåndsvisningen inne i Claude lagrer ingenting, sandkassa blokkerer lagring. Lokalt og på Pages lagres status, notater og rutiner i nettleseren.
 * Lagringen er per nettleser. Mobilen og PCen har hver sin tavle. Bruk mobilen som hovedcockpit. Søknadsstatus og notater ligger bare der, ingen andre kan se hva du har søkt på.
 * Flytte alt til en annen enhet: SIKKERHETSKOPI nederst på siden. Last ned kopi (eller Vis som tekst), og hent den inn på den andre enheten.
+* Øverst står SKJERMEN. Radarskjermen har én prikk per kilde: grønn er OK, gul med ring betyr at en stilling du vil ha er ute, rød med kryss betyr at kilden feiler. Sveipet er pynt, prikkene er ekte status fra siste sjekk. AVGANGER er de samme stillingene som en avgangstavle: BOARDING når fristen er tre dager eller nærmere, SISTE UTROP med nedtelling på fristdagen, GATE STENGT når fristen er ute, AVGÅTT for de to sist lukkede. Setter du SØKT på en stilling, står det på tavla.
+* LOGG er det radaren faktisk har gjort: hver sjekk, nye og lukkede utlysninger, kilder som feiler og kommer tilbake, påminnelser. De ti siste ruller også nederst på skjermen.
+* Under hver arbeidsgiver på TAVLE står en trendlinje over antall annonser per sjekk. Blir den rød, har tallet falt til null eller under halvparten av det vanlige, som oftest betyr at leseren er ødelagt.
+* TV-MODUS: trykk TV-MODUS i menyen, eller legg til `?tv` bak adressen på en TV, et nettbrett eller en ekstra skjerm. Da vises bare radarskjermen og tavla i stort format, høyre side bytter mellom AVGANGER, LOGG og TRENDER hvert 20. sekund, skjermen holdes våken, og ingenting kan redigeres. Esc eller et trykk går tilbake.
 * LEDIG NÅ viser hver stilling du vil ha med nedtelling til fristen. Sett status (SKAL SØKE, SØKT, INTERVJU ...) så havner den under SØKNADER og blir stående der også etter at utlysningen er lukket.
 * HISTORIKK fylles etter hvert som radaren ser utlysninger komme og gå. Over tid viser den når hver arbeidsgiver pleier å lyse ut.
 * RADAR viser hvor ofte GitHub faktisk har kjørt sjekken det siste døgnet, og den lengste pausen siste uke.

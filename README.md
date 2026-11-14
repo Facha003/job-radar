@@ -29,6 +29,9 @@ GitHub Actions (cron every 10 min, paced to one real check per ~30 min)
        └─ commits seen.json + docs/status.json + docs/jobs.json
 GitHub Pages
   └─ docs/ (plain HTML, CSS and JavaScript, no build step, departure board style)
+       ├─ a radar scope with one blip per source, and a split-flap departure board of open jobs
+       ├─ a log and ticker of what the radar did, trend lines of each source's listing count
+       ├─ TV mode (add ?tv to the address) for a spare screen
        ├─ every wanted job with a deadline countdown
        ├─ a private application tracker: status and notes stay in the browser
        ├─ employer board generated from status.json, history of closed postings
@@ -61,6 +64,8 @@ GitHub Pages
 **An alert only counts once it is delivered.** A posting is marked as seen after a channel has accepted the alert. If delivery fails, it stays unseen and alerts again on the next run. Warnings about a broken site travel the same road as job alerts, so they cannot be lost quietly either.
 
 **A catch-all needs a stricter filter than a single employer.** NAV's feed is every job ad in Norway, about 2,250 changes a day. The radar keeps a bookmark and reads only what is new. Aviation words ("flyekspeditør", "check-in") are enough on their own. Everyday words ("kundeservice", "servicemedarbeider") only count when the ad itself is at the airport, because the same municipality holds a whole town of shops: the first real run matched a supermarket cashier until this rule went in.
+
+**Nothing on screen is faked.** The radar only runs a few times a day, so the display never pretends to scan live. The sweep passes over each source's real last status, the board shows real postings, the log is what the radar actually did (kept as `events` in `status.json`), the trend lines are real listing counts per run (`history`), and the clocks count real time since the last check.
 
 **Closing the issue is the off switch.** Each job gets its own GitHub issue. Deadline reminders go there as comments, and stop when the issue is closed. The radar never needs to know whether I applied: that stays in my browser, and a closed issue in a public repo says nothing about why it was closed.
 

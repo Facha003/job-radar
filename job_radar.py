@@ -73,6 +73,7 @@ MAX_ALERT_HISTORY = 25    # alerts kept in seen.json and shown on the dashboard
 DIGEST_THRESHOLD = 5      # more hits than this in one run -> one summary ping, not a storm
 REMIND_DAYS = (3, 1)       # remind this many days before a deadline, once each
 MAX_JOB_HISTORY = 300     # postings remembered in docs/jobs.json (oldest closed ones go first)
+MAX_EVENTS = 150          # lines kept in the dashboard's log (status.json "events")
 MAX_RUN_LOG = 200         # run times kept in status.json, so the dashboard can show real pace
 DEFAULT_DASHBOARD = "https://facha003.github.io/job-radar/"
 
@@ -1168,8 +1169,9 @@ def reminder_text(left):
 
 def send_reminders(cfg, jobs, today, skip_keys=()):
     """Send what due_reminders() found and mark each as sent on the job.
-    Closing a job's GitHub issue means "done with this one": no reminder."""
-    sent = 0
+    Closing a job's GitHub issue means "done with this one": no reminder.
+    Returns [(job, days left)] for the reminders that went out."""
+    sent = []
     for job, left, level in due_reminders(jobs, today, skip_keys):
         number = job.get("issue")
         if number and issue_is_closed(number):
@@ -1186,7 +1188,7 @@ def send_reminders(cfg, jobs, today, skip_keys=()):
             delivered = delivered or ok
         if delivered or not any_channel(cfg):
             job["reminded"] = sorted(set(job.get("reminded", [])) | {level})
-            sent += 1
+            sent.append((job, left))
     return sent
 
 
@@ -1259,6 +1261,61 @@ def save_text(path, text):
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_bytes(text.encode("utf-8"))   # bytes: keep the CRLF line ends exactly
     os.replace(tmp, path)
+
+
+# --------------------------------------------------------------------------
+# the dashboard's log and trend lines (status.json "events" and "history")
+# --------------------------------------------------------------------------
+
+def event(t, kind, target, text, link=""):
+    return {"t": t, "type": kind, "target": target, "text": text, "link": link}
+
+
+def build_events(jobs, run_report, fail_before, new_hits, reminded, stamp):
+    """What happened in this run, as log lines for the dashboard.
+
+    jobs         the job list after update_jobs()
+    run_report   the per-target entries written to status.json
+    fail_before  {target name: failures in a row} as it was before this run
+    new_hits     [(target name, Hit)] that were delivered this run
+    reminded     [(job, days left)] from send_reminders()
+
+    Types: new, closed, fail (only the first failure in a row), back,
+    reminder, and one closing "check" line that sums the run up."""
+    out = [event(stamp, "new", name, hit.text, hit.link) for name, hit in new_hits]
+    out += [event(stamp, "closed", j.get("target", ""), j.get("title") or j.get("text", ""), j.get("link", ""))
+            for j in jobs if j.get("state") == "closed" and j.get("closed_at") == stamp]
+    for r in run_report:
+        before = fail_before.get(r["name"], 0)
+        if not r["ok"] and before == 0:
+            out.append(event(stamp, "fail", r["name"], r.get("error") or "svarer ikke", r.get("url", "")))
+        elif r["ok"] and before > 0:
+            out.append(event(stamp, "back", r["name"], f"virker igjen etter {before} feilet sjekk" + ("" if before == 1 else "er"), r.get("url", "")))
+    out += [event(stamp, "reminder", j.get("target", ""), f"{reminder_text(left)}: {j.get('title') or j.get('text', '')}", j.get("link", ""))
+            for j, left in reminded]
+    failing = sum(1 for r in run_report if not r["ok"])
+    open_now = sum(1 for j in jobs if j.get("state") == "open")
+    summary = f"{len(run_report)} kilder sjekket, {open_now} ledig" + (f", {failing} feilet" if failing else "")
+    out.append(event(stamp, "check", "", summary))
+    return out
+
+
+def seed_events(alerts, jobs):
+    """First run with a log: start it from what the radar already remembers,
+    so the dashboard does not open on an empty log."""
+    seeded = [event(a["time"], "new", a.get("target", ""), a.get("text", ""), a.get("link", "")) for a in alerts if a.get("time")]
+    seeded += [event(j["closed_at"], "closed", j.get("target", ""), j.get("title") or j.get("text", ""), j.get("link", ""))
+               for j in jobs if j.get("state") == "closed" and j.get("closed_at")]
+    return sorted(seeded, key=lambda e: e["t"], reverse=True)
+
+
+def history_entry(run_report, stamp):
+    """Listing count per source for this run: the dashboard's trend lines."""
+    return {
+        "t": stamp,
+        "n": {r["id"]: r.get("listings") for r in run_report if r["ok"]},
+        "fail": [r["id"] for r in run_report if not r["ok"]],
+    }
 
 
 # --------------------------------------------------------------------------
@@ -1369,6 +1426,7 @@ def run_radar(cfg, force_heartbeat=False):
     fail_counts = state.get("fail", {})
     alerts = state.get("alerts", [])
     source_memory = state.get("sources", {})   # bookmarks some sources keep between runs
+    fail_before = dict(fail_counts)
     prev_status = load_json(STATUS_PATH, {})
     prev_open = {t["name"]: t.get("open", []) for t in prev_status.get("targets", [])}
 
@@ -1431,8 +1489,10 @@ def run_radar(cfg, force_heartbeat=False):
     # A hit only counts as seen once it actually reached you. If every channel
     # failed, it stays unseen and alerts again on the next run.
     undelivered = 0
+    delivered_hits = []
     for name, hit, direct_ok in pending:
         if direct_ok or hit.key in issue_of or not channels_exist:
+            delivered_hits.append((name, hit))
             seen_keys.add(hit.key)
             alerts.insert(0, {"time": now_iso(), "target": name, "text": hit.text, "link": hit.link})
         else:
@@ -1482,10 +1542,13 @@ def run_radar(cfg, force_heartbeat=False):
         if a.get("time"):
             hint[a.get("link")] = a["time"]
             hint[f"{a.get('target')}|{a.get('text')}"] = a["time"]
-    jobs = update_jobs(load_json(JOBS_PATH, {}).get("jobs", []), checked, stamp, first_seen_hint=hint, issues=issue_of)
-    reminders = send_reminders(cfg, jobs, today_oslo(), skip_keys={hit.key for _, hit, _ in pending})
+    prev_jobs = load_json(JOBS_PATH, {}).get("jobs", [])
+    jobs = update_jobs(prev_jobs, checked, stamp, first_seen_hint=hint, issues=issue_of)
+    reminded = send_reminders(cfg, jobs, today_oslo(), skip_keys={hit.key for _, hit, _ in pending})
     save_json(JOBS_PATH, {"generated": stamp, "jobs": jobs})
     save_text(CALENDAR_PATH, build_calendar(jobs, {t.get("name"): t.get("label") or t.get("name") for t in cfg.get("targets", [])}))
+    old_events = prev_status["events"] if isinstance(prev_status.get("events"), list) else seed_events(alerts[len(delivered_hits):], prev_jobs)
+    events = build_events(jobs, run_report, fail_before, delivered_hits, reminded, stamp) + old_events
     save_json(STATUS_PATH, {
         "generated": stamp,
         "channels": {"email": bool(email_mode(cfg)), "push": bool(get_topic(cfg))},
@@ -1493,10 +1556,12 @@ def run_radar(cfg, force_heartbeat=False):
         "recent_alerts": alerts,
         "runs": (prev_status.get("runs", []) + [stamp])[-MAX_RUN_LOG:],
         "calendar": True,   # docs/frister.ics exists; the dashboard shows a subscribe link
+        "events": events[:MAX_EVENTS],                                                              # newest first
+        "history": (prev_status.get("history", []) + [history_entry(run_report, stamp)])[-MAX_RUN_LOG:],  # oldest first
     })
     delivered = len(pending) - undelivered
     open_now = sum(1 for j in jobs if j.get("state") == "open")
-    print(f"Done. {delivered} new alert(s) and {reminders} deadline reminder(s) this run, {open_now} wanted job(s) open. "
+    print(f"Done. {delivered} new alert(s) and {len(reminded)} deadline reminder(s) this run, {open_now} wanted job(s) open. "
           "Status written to docs/status.json and docs/jobs.json")
     return 0
 

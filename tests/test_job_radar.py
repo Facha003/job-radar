@@ -996,19 +996,19 @@ def test_no_reminder_for_closed_postings_or_jobs_alerted_this_run():
 def test_reminder_is_a_comment_on_the_jobs_own_issue(monkeypatch):
     gh = GitHub(monkeypatch)
     jobs = [djob(1, "2026-11-21", issue=41)]
-    assert jr.send_reminders({}, jobs, TODAY) == 1
+    assert len(jr.send_reminders({}, jobs, TODAY)) == 1
     assert gh.created == []
     number, body = gh.comments[0]
     assert number == 41 and body.startswith("@someone ⏰ **Frist i morgen (21.11)**: [Job 1](https://alpha.test/1)")
     assert jobs[0]["reminded"] == [1]
-    assert jr.send_reminders({}, jobs, TODAY) == 0 and len(gh.comments) == 1   # once
+    assert len(jr.send_reminders({}, jobs, TODAY)) == 0 and len(gh.comments) == 1   # once
 
 
 def test_closing_the_issue_stops_reminders(monkeypatch):
     gh = GitHub(monkeypatch)
     gh.closed_by_user = {41}
     jobs = [djob(1, "2026-11-21", issue=41), djob(2, "2026-11-23", issue=42)]
-    assert jr.send_reminders({}, jobs, TODAY) == 1
+    assert len(jr.send_reminders({}, jobs, TODAY)) == 1
     assert [n for n, _ in gh.comments] == [42]
     assert jobs[0]["reminded"] == []   # reopen the issue and the reminder comes after all
 
@@ -1016,16 +1016,16 @@ def test_closing_the_issue_stops_reminders(monkeypatch):
 def test_reminder_for_a_job_without_its_own_issue_is_a_closed_notice(monkeypatch):
     gh = GitHub(monkeypatch)
     jobs = [djob(1, "2026-11-20")]
-    assert jr.send_reminders({}, jobs, TODAY) == 1
+    assert len(jr.send_reminders({}, jobs, TODAY)) == 1
     assert gh.created[0]["title"] == "⏰ FRIST I DAG (20.11): Job 1" and gh.closed == ["41"]
 
 
 def test_undelivered_reminder_is_tried_again(monkeypatch):
     gh = GitHub(monkeypatch, fail=True)
     jobs = [djob(1, "2026-11-21", issue=41)]
-    assert jr.send_reminders({}, jobs, TODAY) == 0 and jobs[0]["reminded"] == []
+    assert len(jr.send_reminders({}, jobs, TODAY)) == 0 and jobs[0]["reminded"] == []
     gh.fail = False
-    assert jr.send_reminders({}, jobs, TODAY) == 1 and jobs[0]["reminded"] == [1]
+    assert len(jr.send_reminders({}, jobs, TODAY)) == 1 and jobs[0]["reminded"] == [1]
 
 
 def test_reminder_push_is_quieter_than_a_hit_and_louder_than_housekeeping(monkeypatch):
@@ -1345,3 +1345,95 @@ def test_nav_everyday_words_only_count_at_the_airport(monkeypatch):
     assert [u.rsplit("/", 1)[1] for u, _ in calls] == ["p1", "k4"]
     assert [h.text for h in result.hits] == ["Servicemedarbeider (Stille AS) · frist 27.11.2026"]
     assert len(result.open) == 3
+
+
+# ------------------------------------------- dashboard log and trend lines
+
+def rep(name, ok=True, listings=5, error=""):
+    r = {"name": name, "id": name.lower(), "ok": ok, "url": f"https://{name.lower()}.test"}
+    if ok:
+        r["listings"] = listings
+    else:
+        r["error"] = error
+    return r
+
+
+def kinds(events):
+    return [(e["type"], e["target"], e["text"]) for e in events]
+
+
+def test_events_for_a_quiet_run_is_one_summary_line():
+    jobs = [{"key": "a", "state": "open", "title": "Job", "target": "Alpha"}]
+    ev = jr.build_events(jobs, [rep("Alpha"), rep("Beta")], {"Alpha": 0, "Beta": 0}, [], [], T2)
+    assert kinds(ev) == [("check", "", "2 kilder sjekket, 1 ledig")]
+    assert ev[0]["t"] == T2
+
+
+def test_events_new_closed_fail_back_reminder():
+    jobs = [
+        {"key": "a", "state": "open", "title": "Job A", "target": "Alpha", "link": "la"},
+        {"key": "b", "state": "closed", "closed_at": T2, "title": "Job B", "target": "Alpha", "link": "lb"},   # closed in this run
+        {"key": "c", "state": "closed", "closed_at": T1, "title": "Job C", "target": "Alpha"},                 # closed earlier
+    ]
+    report = [rep("Alpha"), rep("Beta", ok=False, error="HTTP 403 Forbidden"), rep("Gamma", ok=False, error="tidsavbrudd"), rep("Delta")]
+    before = {"Alpha": 0, "Beta": 0, "Gamma": 4, "Delta": 3}
+    ev = jr.build_events(jobs, report, before, [("Alpha", hit("Alpha", 1))], [(jobs[0], 1)], T2)
+    assert kinds(ev) == [
+        ("new", "Alpha", "Job 1"),
+        ("closed", "Alpha", "Job B"),
+        ("fail", "Beta", "HTTP 403 Forbidden"),                       # first failure in a row: logged
+        ("back", "Delta", "virker igjen etter 3 feilet sjekker"),     # Gamma was already failing: not logged again
+        ("reminder", "Alpha", "Frist i morgen: Job A"),
+        ("check", "", "4 kilder sjekket, 1 ledig, 2 feilet"),
+    ]
+    assert ev[0]["link"] == hit("Alpha", 1).link and all(e["t"] == T2 for e in ev)
+
+
+def test_history_entry_has_counts_for_ok_sources_and_names_the_failing():
+    assert jr.history_entry([rep("Alpha", listings=7), rep("Beta", ok=False), rep("Nav", listings=None)], T1) == {
+        "t": T1, "n": {"alpha": 7, "nav": None}, "fail": ["beta"]}
+
+
+def test_run_writes_log_and_history_newest_event_first(monkeypatch):
+    GitHub(monkeypatch)
+    no_heartbeat()
+    fake_sources(monkeypatch, {
+        "Alpha": lambda seen: result_with(*[h for h in [hit("Alpha", 1)] if h.key not in seen]),
+        "Beta": result_with()})
+    jr.run_radar(two_targets())
+    fake_sources(monkeypatch, {"Alpha": result_with(), "Beta": requests.ConnectionError("down")})
+    jr.run_radar(two_targets())
+    st = status()
+    assert [(e["type"], e["target"]) for e in st["events"]] == [
+        ("closed", "Alpha"), ("fail", "Beta"), ("check", ""),      # second run
+        ("new", "Alpha"), ("check", ""),                           # first run
+    ]
+    assert st["events"][2]["text"] == "2 kilder sjekket, 0 ledig, 1 feilet"
+    assert [(h["n"], h["fail"]) for h in st["history"]] == [({"alpha": 3, "beta": 3}, []), ({"alpha": 3}, ["beta"])]
+    assert st["history"][1]["t"] == st["generated"]
+
+
+def test_first_run_with_a_log_seeds_it_from_old_alerts_and_closed_jobs(monkeypatch):
+    no_heartbeat()
+    old = json.loads(jr.STATE_PATH.read_text(encoding="utf-8"))
+    old["alerts"] = [{"time": T2, "target": "Alpha", "text": "Old alert", "link": "l"}]
+    jr.STATE_PATH.write_text(json.dumps(old), encoding="utf-8")
+    jr.JOBS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    jr.JOBS_PATH.write_text(json.dumps({"jobs": [{"key": "Alpha|x", "target": "Alpha", "title": "Gone", "state": "closed", "closed_at": T1}]}), encoding="utf-8")
+    jr.STATUS_PATH.write_text(json.dumps({"generated": T3, "targets": [], "runs": [T3]}), encoding="utf-8")   # a v4 status: no log yet
+    fake_sources(monkeypatch, {"Alpha": result_with(), "Beta": result_with()})
+    jr.run_radar(two_targets())
+    assert [(e["type"], e["text"]) for e in status()["events"]] == [
+        ("check", "2 kilder sjekket, 0 ledig"), ("new", "Old alert"), ("closed", "Gone")]
+    jr.run_radar(two_targets())
+    assert [e["type"] for e in status()["events"]] == ["check", "check", "new", "closed"]   # seeded once, not again
+
+
+def test_log_and_history_are_capped(monkeypatch):
+    monkeypatch.setattr(jr, "MAX_EVENTS", 3)
+    monkeypatch.setattr(jr, "MAX_RUN_LOG", 2)
+    no_heartbeat()
+    fake_sources(monkeypatch, {"Alpha": result_with(), "Beta": result_with()})
+    for _ in range(5):
+        jr.run_radar(two_targets())
+    assert len(status()["events"]) == 3 and len(status()["history"]) == 2

@@ -1,8 +1,8 @@
 /* Jobbradar service worker.
    Network first, always: when you are online you get fresh data, never a cached copy.
    The cache is only the fallback that lets the app open without coverage. */
-const CACHE = "jobbradar-v4";
-const SHELL = ["./", "index.html", "app.css", "app.js", "manifest.webmanifest", "icon-192.png"];
+const CACHE = "jobbradar-v5";
+const SHELL = ["./", "index.html", "app.css", "app.js", "display.js", "manifest.webmanifest", "icon-192.png"];
 
 self.addEventListener("install", event => {
   self.skipWaiting();
