@@ -101,5 +101,7 @@ jobs:
         run: |
           git config user.name "radar-bot"
           git config user.email "radar-bot@users.noreply.github.com"
-          git add seen.json docs/status.json docs/jobs.json docs/frister.ics
+          # everything the radar writes lives in seen.json and docs/ (status.json, jobs.json, frister.ics).
+          # Adding the folder, not the files by name, also works on runs that write nothing (dry run, test).
+          git add seen.json docs
           git diff --cached --quiet || (git commit -m "radar update" && git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME")
