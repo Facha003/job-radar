@@ -9,6 +9,7 @@
 #   NTFY_TOPIC                       push to your phone via ntfy
 #   SMTP_USER, SMTP_PASS             mail from your own Gmail instead of GitHub issues
 #   ALERT_EMAIL                      recipient for the SMTP mail
+#   NAV_FEED_TOKEN                   your own token for NAV's job feed (without it the public one is used)
 #   (kept as secrets so the repo can be PUBLIC, which free GitHub Pages requires)
 #
 # Email needs no secrets: the script opens a GitHub issue per run with new
@@ -88,6 +89,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NAV_FEED_TOKEN: ${{ secrets.NAV_FEED_TOKEN }}
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}

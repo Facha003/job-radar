@@ -59,7 +59,7 @@ def serve(monkeypatch, pages):
 def clean_env(monkeypatch, tmp_path):
     """No real channels, no real files, no real network, no sleeping."""
     for var in ("NTFY_TOPIC", "ALERT_EMAIL", "SMTP_USER", "SMTP_PASS", "SMTP_HOST", "SMTP_PORT",
-                "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "GITHUB_TOKEN", "GITHUB_REPOSITORY",
+                "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "GITHUB_TOKEN", "GITHUB_REPOSITORY", "NAV_FEED_TOKEN",
                 "GITHUB_ACTIONS", "GITHUB_API_URL", "DRY_RUN_TARGET"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(jr, "STATE_PATH", tmp_path / "seen.json")
@@ -512,7 +512,7 @@ def test_smtp_email_is_built_and_sent(monkeypatch):
 
 def fake_sources(monkeypatch, behaviour):
     """behaviour: {target name: CheckResult | Exception | callable}"""
-    def fake_check(t, seen_keys, log=None):
+    def fake_check(t, seen_keys, log=None, memory=None):
         b = behaviour[t["name"]]
         if callable(b):
             b = b(seen_keys)
@@ -793,11 +793,13 @@ def test_test_alert_fails_loudly_when_nothing_delivers(monkeypatch, tmp_path, ca
 
 def test_real_config_is_well_formed():
     names = [t["name"] for t in CONFIG["targets"]]
-    assert len(names) == len(set(names)) == 5
+    assert len(names) == len(set(names)) == 8
+    assert len({t["id"] for t in CONFIG["targets"]}) == 8
     for t in CONFIG["targets"]:
         assert t["url"].startswith("https://") and t["keywords"]
-        assert t.get("type") in (None, "webcruiter", "successfactors")
-        for field in ("keywords", "exclude_keywords", "location_must_contain", "location_elsewhere", "detail_trigger", "href_must_contain"):
+        assert t.get("type") in (None, "webcruiter", "successfactors", "teamtailor", "nav")
+        for field in ("keywords", "exclude_keywords", "location_must_contain", "location_elsewhere", "detail_trigger", "href_must_contain",
+                      "municipals", "exclude_employers"):
             assert all(isinstance(s, str) and s.strip() for s in t.get(field, [])), (t["name"], field)
     # a place we want must never also be listed as "elsewhere"
     n = nor()
@@ -1084,3 +1086,262 @@ def test_run_writes_the_calendar(monkeypatch):
     ics = jr.CALENDAR_PATH.read_bytes().decode("utf-8")
     assert "DTSTART;VALUE=DATE:20261201" in ics and "\r\n" in ics
     assert status()["calendar"] is True
+
+
+# ------------------------------------------------------- Avinor (Webcruiter)
+
+AVINOR_API = "https://candidate.webcruiter.com/api/odvert/companysearch/2061"
+
+
+def test_avinor_only_passenger_roles_at_oslo_airport(monkeypatch):
+    ads = [
+        {"Id": "1", "Heading": "Terminalvert Oslo lufthavn", "JobCategory": "Lufthavnoperativt", "Workplace": "Gardermoen",
+         "OpenAdvertUrl": "https://avinor.test/1", "ApplicationDeadline": "2026-12-01T00:00:00"},
+        {"Id": "2", "Heading": "Lufthavnbetjent", "JobCategory": "Lufthavnoperativt", "Workplace": "Hammerfest"},
+        {"Id": "3", "Heading": "Kundeservice passasjerer", "JobCategory": "Annet", "Workplace": "Bergen"},          # wrong airport
+        {"Id": "4", "Heading": "Leder kundeservice", "JobCategory": "Ledelse", "Workplace": "Gardermoen"},          # management
+        {"Id": "5", "Heading": "Teknisk interessert? Bli VVS-tekniker på Norges viktigste flyplass!", "JobCategory": "Annet", "Workplace": "Gardermoen"},
+        {"Id": "6", "Heading": "Bli flygeleder 2027", "JobCategory": "Annet", "Workplace": "Oslo"},
+    ]
+    serve(monkeypatch, {AVINOR_API: Resp(data={"Data": ads})})
+    result = jr.check(target("Avinor"), set())
+    assert [(h.text, h.key) for h in result.hits] == [("Terminalvert Oslo lufthavn (Gardermoen) · frist 01.12", "Avinor|webcruiter|1")]
+    assert result.open[0]["deadline"] == "2026-12-01" and result.listings == 6
+
+
+# -------------------------------------------------- Aviator (Teamtailor RSS)
+
+def tt_item(title, guid, city, country, department="Ground Handling", body="Join us."):
+    return (f"<item><title>{title}</title><description><![CDATA[<p>{body}</p>]]></description><pubDate>Tue, 10 Nov 2026 13:25:31 +0100</pubDate>"
+            f"<link>https://careers.no.aviator.eu/jobs/{guid}</link><remoteStatus>none</remoteStatus><guid>{guid}</guid>"
+            f"<tt:locations><tt:location><tt:name>Aviator {city}</tt:name><tt:city>{city}</tt:city><tt:country>{country}</tt:country></tt:location></tt:locations>"
+            f"<tt:department>{department}</tt:department></item>")
+
+
+def tt_feed(*items):
+    return '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:tt="https://teamtailor.com/locations"><channel><title>Jobs</title>' + "".join(items) + "</channel></rss>"
+
+
+def test_aviator_feed_location_and_roles(monkeypatch):
+    feed = tt_feed(
+        tt_item("Passenger Service Agent", "g1", "Gardermoen", "Norway"),
+        tt_item("Passenger Service Agent", "g2", "Stockholm-Arlanda", "Sweden"),
+        tt_item("Flygplanslastare Arlanda", "g3", "Stockholm-Arlanda", "Sweden"),
+        tt_item("Ramp Agent &amp; loader", "g4", "Gardermoen", "Norway"),
+        tt_item("Sommerjobb på flyplassen 2027", "g5", "Oslo", "Norway", body="Du jobber med innsjekk og gate."),
+        tt_item("Sommerjobb i hangaren 2027", "g6", "Oslo", "Norway", body="Du vasker fly."),
+        tt_item("HR Specialist", "g7", "Oslo", "Norway", department="Admin"),
+    )
+    calls = serve(monkeypatch, {target("Aviator")["feed"]: feed})
+    result = jr.check(target("Aviator"), set())
+    assert [tuple(h) for h in result.hits] == [
+        ("Passenger Service Agent (Gardermoen)", "https://careers.no.aviator.eu/jobs/g1", "Aviator|teamtailor|g1"),
+        ("Sommerjobb på flyplassen 2027 (Oslo)", "https://careers.no.aviator.eu/jobs/g5", "Aviator|teamtailor|g5"),
+    ]
+    assert result.listings == 7 and calls == [target("Aviator")["feed"]]
+    assert jr.check(target("Aviator"), {"Aviator|teamtailor|g1", "Aviator|teamtailor|g5"}).hits == []
+
+
+def test_aviator_feed_that_is_not_rss_is_a_failure(monkeypatch):
+    serve(monkeypatch, {target("Aviator")["feed"]: "<html><body>Not found</body></html>"})
+    with pytest.raises(jr.SourceError, match="not RSS"):
+        jr.check(target("Aviator"), set())
+
+
+# --------------------------------------------------------- NAV (official feed)
+
+NAV = "https://pam-stilling-feed.nav.no"
+
+
+def nav_entry(uuid, title, employer="Firma AS", municipal="ULLENSAKER", status="ACTIVE", changed="2026-11-10T10:00:00+01:00"):
+    return {"id": uuid, "_feed_entry": {"uuid": uuid, "status": status, "title": title, "businessName": employer,
+                                        "municipal": municipal, "sistEndret": changed}}
+
+
+def nav_page(page_id, entries, next_id=None):
+    return Resp(data={"id": page_id, "next_id": next_id, "next_url": f"/api/v1/feed/{next_id}" if next_id else None, "items": entries})
+
+
+def nav_detail(uuid, title, due="27.11.2026", expires="2099-01-01T00:00:00+01:00", status="ACTIVE", employer="Firma AS",
+               city=None, text="Vi søker deg."):
+    return Resp(data={"uuid": uuid, "status": status, "ad_content": {
+        "title": title, "applicationDue": due, "expires": expires, "employer": {"name": employer},
+        "description": f"<p>{text}</p>",
+        "workLocations": [{"country": "NORGE", "address": None, "city": city, "postalCode": None, "county": "AKERSHUS", "municipal": "ULLENSAKER"}],
+        "link": f"https://arbeidsplassen.nav.no/stillinger/stilling/{uuid}"}})
+
+
+def nav_serve(monkeypatch, pages):
+    """Like serve(), but records the headers too."""
+    calls = []
+
+    def fake_fetch(method, url, **kwargs):
+        calls.append((url, kwargs.get("headers", {})))
+        page = pages.get(url)
+        if page is None:
+            raise requests.ConnectionError(f"no fixture for {url}")
+        if isinstance(page, Exception):
+            raise page
+        return page
+
+    monkeypatch.setattr(jr, "fetch", fake_fetch)
+    monkeypatch.setenv("NAV_FEED_TOKEN", "my.own.token")
+    return calls
+
+
+def test_nav_first_run_filters_follows_pages_and_remembers(monkeypatch):
+    at(monkeypatch, 2026, 11, 14)
+    pages = {
+        f"{NAV}/api/v1/feed": nav_page("p1", [
+            nav_entry("a", "Passasjerservice på Oslo lufthavn", "Handling AS"),
+            nav_entry("b", "Sykepleier 100 %", "Ullensaker kommune"),
+            nav_entry("c", "Flyekspeditør innsjekk", "Handling AS", municipal="BERGEN"),                    # wrong place
+            nav_entry("d", "Check-in agent Gardermoen", "Crew AS", municipal="OSLO"),                        # place named in the title
+            nav_entry("e", "Passasjerservice sommer", "SAS Ground Handling Norway AS"),                      # followed directly already
+            nav_entry("f", "Butikkselger med passasjerkontakt", "Kiosk AS"),                                 # excluded word
+        ], next_id="p2"),
+        f"{NAV}/api/v1/feed/p2": nav_page("p2", [
+            nav_entry("g", "Flyekspeditør", "Fly AS"),
+            nav_entry("a", "...", "", status="INACTIVE", changed="2026-11-12T10:00:00+01:00"),               # stopped later on
+        ]),
+        f"{NAV}/api/v1/feedentry/d": nav_detail("d", "Check-in agent Gardermoen", employer="Crew AS"),
+        f"{NAV}/api/v1/feedentry/g": nav_detail("g", "Flyekspeditør", due="Snarest", employer="Fly AS"),
+    }
+    calls = nav_serve(monkeypatch, pages)
+    memory = {}
+    result = jr.check(target("NAV"), set(), memory=memory)
+    assert [tuple(h) for h in result.hits] == [
+        ("Check-in agent Gardermoen (Crew AS) · frist 27.11.2026", "https://arbeidsplassen.nav.no/stillinger/stilling/d", "NAV arbeidsplassen|nav|d"),
+        ("Flyekspeditør (Fly AS) · frist Snarest", "https://arbeidsplassen.nav.no/stillinger/stilling/g", "NAV arbeidsplassen|nav|g"),
+    ]
+    assert [(o["title"], o["deadline"]) for o in result.open] == [("Check-in agent Gardermoen (Crew AS)", "2026-11-27"), ("Flyekspeditør (Fly AS)", None)]
+    assert memory["cursor"] == "p2" and set(memory["open"]) == {"d", "g"}
+    first_url, first_headers = calls[0]
+    assert first_url == f"{NAV}/api/v1/feed" and first_headers["Authorization"] == "Bearer my.own.token"
+    assert first_headers["If-Modified-Since"] == "Wed, 30 Sep 2026 12:00:00 GMT"     # 45 days back
+    assert "If-Modified-Since" not in calls[1][1]
+
+
+def test_nav_next_run_continues_from_the_bookmark(monkeypatch):
+    at(monkeypatch, 2026, 11, 14)
+    memory = {"cursor": "p2", "open": {"g": {"title": "Flyekspeditør", "employer": "Fly AS", "changed": "2026-11-10T10:00:00+01:00",
+                                             "link": "https://arbeidsplassen.nav.no/stillinger/stilling/g", "due": "Snarest", "deadline": None,
+                                             "expires": "2099-01-01T00:00:00+01:00", "detailed": True},
+                                       "old": {"title": "Gate agent", "employer": "X", "changed": "c", "link": "l", "due": "", "deadline": None,
+                                               "expires": "2026-11-01T00:00:00+01:00", "detailed": True}}}
+    calls = nav_serve(monkeypatch, {
+        f"{NAV}/api/v1/feed/p2": nav_page("p2", [nav_entry("g", "Flyekspeditør", "Fly AS"),                  # unchanged: not opened again
+                                                   nav_entry("h", "Check-in agent OSL", "Gate AS", changed="2026-11-14T09:00:00+01:00")]),
+        f"{NAV}/api/v1/feedentry/h": nav_detail("h", "Check-in agent OSL", due="2026-11-30", employer="Gate AS"),
+    })
+    result = jr.check(target("NAV"), {"NAV arbeidsplassen|nav|g"}, memory=memory)
+    assert [h.key for h in result.hits] == ["NAV arbeidsplassen|nav|h"]
+    assert [o["key"].rsplit("|", 1)[1] for o in result.open] == ["g", "h"]        # "old" expired and is gone
+    assert [u for u, _ in calls] == [f"{NAV}/api/v1/feed/p2", f"{NAV}/api/v1/feedentry/h"]
+    assert memory["cursor"] == "p2" and set(memory["open"]) == {"g", "h"}
+
+
+def test_nav_reads_at_most_a_page_budget_then_continues_later(monkeypatch):
+    at(monkeypatch, 2026, 11, 14)
+    monkeypatch.setattr(jr, "NAV_MAX_PAGES", 2)
+    calls = nav_serve(monkeypatch, {
+        f"{NAV}/api/v1/feed": nav_page("p1", [], next_id="p2"),
+        f"{NAV}/api/v1/feed/p2": nav_page("p2", [], next_id="p3"),
+        f"{NAV}/api/v1/feed/p3": nav_page("p3", [nav_entry("z", "Flyekspeditør", "Fly AS")]),
+        f"{NAV}/api/v1/feedentry/z": nav_detail("z", "Flyekspeditør"),
+    })
+    memory = {}
+    assert jr.check(target("NAV"), set(), memory=memory).hits == []
+    assert memory["cursor"] == "p3" and len(calls) == 2
+    assert [h.key for h in jr.check(target("NAV"), set(), memory=memory).hits] == ["NAV arbeidsplassen|nav|z"]
+
+
+def test_nav_failure_leaves_the_bookmark_untouched(monkeypatch):
+    at(monkeypatch, 2026, 11, 14)
+    nav_serve(monkeypatch, {
+        f"{NAV}/api/v1/feed/p1": nav_page("p1", [nav_entry("z", "Gate agent", "Gate AS")], next_id="p2"),
+        f"{NAV}/api/v1/feed/p2": requests.ConnectionError("down"),
+    })
+    memory = {"cursor": "p1", "open": {}}
+    with pytest.raises(requests.ConnectionError):
+        jr.check(target("NAV"), set(), memory=memory)
+    assert memory == {"cursor": "p1", "open": {}}
+
+
+def test_nav_ad_still_alerts_when_its_details_cannot_be_read(monkeypatch):
+    at(monkeypatch, 2026, 11, 14)
+    nav_serve(monkeypatch, {f"{NAV}/api/v1/feed": nav_page("p1", [nav_entry("z", "Flyekspeditør", "Fly AS")])})
+    memory = {}
+    result = jr.check(target("NAV"), set(), memory=memory)
+    assert [tuple(h) for h in result.hits] == [("Flyekspeditør (Fly AS)", "https://arbeidsplassen.nav.no/stillinger/stilling/z", "NAV arbeidsplassen|nav|z")]
+    assert memory["open"]["z"]["detailed"] is False        # tried again next run
+
+
+def test_nav_api_change_is_a_failure(monkeypatch):
+    nav_serve(monkeypatch, {f"{NAV}/api/v1/feed": Resp(data={"unexpected": True})})
+    with pytest.raises(jr.SourceError, match="items"):
+        jr.check(target("NAV"), set(), memory={})
+
+
+def test_nav_dry_run_reads_a_recent_slice_with_the_public_token(monkeypatch):
+    at(monkeypatch, 2026, 11, 14)
+    calls = nav_serve(monkeypatch, {
+        f"{NAV}/api/publicToken": Resp("Current public token for Nav Job Vacancy Feed:\neyJh.eyJz.l1WC"),
+        f"{NAV}/api/v1/feed": nav_page("p1", []),
+    })
+    monkeypatch.delenv("NAV_FEED_TOKEN")
+    assert jr.check(target("NAV"), set()).hits == []       # memory=None: a dry run
+    assert calls[1][1]["Authorization"] == "Bearer eyJh.eyJz.l1WC"
+    assert calls[1][1]["If-Modified-Since"] == "Sat, 07 Nov 2026 12:00:00 GMT"      # 7 days back
+
+
+def test_run_keeps_each_sources_memory_between_runs(monkeypatch):
+    GitHub(monkeypatch)
+    no_heartbeat()
+    seen_memory = []
+
+    def source(t, seen_keys, log=None, memory=None):
+        seen_memory.append(dict(memory))
+        if t["name"] == "Alpha":
+            memory["cursor"] = memory.get("cursor", 0) + 1
+        return result_with()
+
+    monkeypatch.setattr(jr, "check", source)
+    jr.run_radar(two_targets())
+    jr.run_radar(two_targets())
+    assert seen_memory == [{}, {}, {"cursor": 1}, {}]
+    assert state()["sources"] == {"Alpha": {"cursor": 2}}
+
+
+def test_nav_everyday_words_only_count_at_the_airport(monkeypatch):
+    at(monkeypatch, 2026, 11, 14)
+    pages = {
+        f"{NAV}/api/v1/feed": nav_page("p1", [
+            nav_entry("k1", "Trives du med kundeservice? Bli vår nye kassemedarbeider!", "Adecco Karrieresenter"),   # really seen 14.11.2026
+            nav_entry("k2", "Servicemedarbeider", "Handling AS"),
+            nav_entry("k3", "Kundeservice på Oslo lufthavn", "Reise AS"),
+            nav_entry("k4", "Servicemedarbeider", "Stille AS"),
+        ]),
+        f"{NAV}/api/v1/feedentry/k1": nav_detail("k1", "Trives du med kundeservice? Bli vår nye kassemedarbeider!", text="Dagligvarebutikk på Jessheim."),
+        f"{NAV}/api/v1/feedentry/k2": nav_detail("k2", "Servicemedarbeider", employer="Handling AS", text="Du møter passasjerene i avgangshallen på Oslo lufthavn."),
+        f"{NAV}/api/v1/feedentry/k3": nav_detail("k3", "Kundeservice på Oslo lufthavn", employer="Reise AS"),
+        # k4: details unreadable this run
+    }
+    calls = nav_serve(monkeypatch, pages)
+    memory = {}
+    result = jr.check(target("NAV"), set(), memory=memory)
+    assert [h.text for h in result.hits] == [
+        "Servicemedarbeider (Handling AS) · frist 27.11.2026",          # the ad text places it at the airport
+        "Kundeservice på Oslo lufthavn (Reise AS) · frist 27.11.2026",  # the title does
+    ]
+    assert memory["open"]["k1"]["rejected"] is True and memory["open"]["k4"]["pending"] is True
+
+    # next run: the shop is not opened again, the unreadable one is tried again and now confirms
+    pages[f"{NAV}/api/v1/feed/p1"] = pages[f"{NAV}/api/v1/feed"]
+    pages[f"{NAV}/api/v1/feedentry/k4"] = nav_detail("k4", "Servicemedarbeider", employer="Stille AS", city="GARDERMOEN")
+    del calls[:]
+    seen = {h.key for h in result.hits}
+    result = jr.check(target("NAV"), seen, memory=memory)
+    assert [u.rsplit("/", 1)[1] for u, _ in calls] == ["p1", "k4"]
+    assert [h.text for h in result.hits] == ["Servicemedarbeider (Stille AS) · frist 27.11.2026"]
+    assert len(result.open) == 3

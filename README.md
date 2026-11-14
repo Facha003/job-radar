@@ -1,6 +1,6 @@
 # Job Radar
 
-A small monitoring system that watches five employers' career sites around the clock and emails me only when a job I actually want shows up: passenger facing airport roles (check in, gate, ticket and service desks, PRM assistance) at Oslo Airport Gardermoen, plus customer guide roles at Vy.
+A small monitoring system that watches seven employers' career sites, plus NAV's national job feed, around the clock and emails me only when a job I actually want shows up: passenger facing airport roles (check in, gate, ticket and service desks, PRM assistance) at Oslo Airport Gardermoen, plus customer guide roles at Vy.
 
 **Live dashboard:** https://facha003.github.io/job-radar/
 
@@ -16,7 +16,8 @@ Airport employers hire in short batches, often with deadlines of a few weeks, an
 GitHub Actions (cron every 10 min, paced to one real check per ~30 min)
   └─ job_radar.py
        ├─ reads each source: HTML career pages (requests + BeautifulSoup),
-       │    the Webcruiter JSON API (Vy), the SuccessFactors job feed (Norwegian)
+       │    the Webcruiter JSON API (Vy, Avinor), the SuccessFactors job feed (Norwegian),
+       │    a Teamtailor RSS feed (Aviator), NAV's official job vacancy feed (everyone else)
        ├─ filters each listing: location → exclusions → role keywords
        │    └─ vague titles: opens the ad and checks the role in the body
        ├─ new matches → one GitHub issue per job → email notification
@@ -41,6 +42,9 @@ GitHub Pages
 | Widerøe Ground Handling | jobbiwideroe.no → Jobbnorge | Flyekspeditør, passenger roles at OSL |
 | ISS | ReachMee portal | PRM assistance at Gardermoen, never cleaning |
 | Vy | Webcruiter API | Kundeveileder and related roles |
+| Avinor | Webcruiter API | Passenger and terminal service roles at Oslo Airport |
+| Aviator | Teamtailor RSS feed | Passenger service, check in, gate at OSL |
+| NAV arbeidsplassen | NAV's official job vacancy feed | Any employer in Ullensaker with an airport passenger role. Catches the handlers and staffing agencies not followed directly |
 
 ## Design choices worth noting
 
@@ -55,6 +59,8 @@ GitHub Pages
 **Go around a blocked door, not through it.** In November 2026 Norwegian's career site started answering GitHub's servers with a Cloudflare challenge (HTTP 403) on every page, feed and sitemap. Rather than disguise the scraper, the radar now reads the public job feed SAP hosts for the same recruiting system. That feed has no location field, so a role match that never mentions Oslo or Gardermoen still alerts, tagged "location not confirmed", unless its title plainly names another airport.
 
 **An alert only counts once it is delivered.** A posting is marked as seen after a channel has accepted the alert. If delivery fails, it stays unseen and alerts again on the next run. Warnings about a broken site travel the same road as job alerts, so they cannot be lost quietly either.
+
+**A catch-all needs a stricter filter than a single employer.** NAV's feed is every job ad in Norway, about 2,250 changes a day. The radar keeps a bookmark and reads only what is new. Aviation words ("flyekspeditør", "check-in") are enough on their own. Everyday words ("kundeservice", "servicemedarbeider") only count when the ad itself is at the airport, because the same municipality holds a whole town of shops: the first real run matched a supermarket cashier until this rule went in.
 
 **Closing the issue is the off switch.** Each job gets its own GitHub issue. Deadline reminders go there as comments, and stop when the issue is closed. The radar never needs to know whether I applied: that stays in my browser, and a closed issue in a public repo says nothing about why it was closed.
 

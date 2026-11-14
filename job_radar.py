@@ -19,9 +19,12 @@ Designed to run on a schedule in GitHub Actions (see .github/workflows/radar_che
 Polite by design: one request per target per run against public career pages and feeds.
 Do NOT point this at finn.no (their terms prohibit scraping; use their alerts).
 
-Three kinds of source (the "type" field of a target in config.json):
+The kinds of source (the "type" field of a target in config.json):
   (none)           an HTML career page, read with BeautifulSoup
-  webcruiter       the Webcruiter candidate JSON API (Vy)
+  webcruiter       the Webcruiter candidate JSON API (Vy, Avinor)
+  teamtailor       a Teamtailor career site's RSS feed (Aviator)
+  nav              NAV's official job vacancy feed: every publicly advertised
+                   job in Norway, filtered down to your municipality and roles
   successfactors   the public SAP SuccessFactors job feed (Norwegian). Their own
                    career site sits behind a Cloudflare challenge that GitHub's
                    servers never pass; the feed is the same data, hosted by SAP.
@@ -39,7 +42,8 @@ import smtplib
 import sys
 import time
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from email.utils import format_datetime
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Callable, NamedTuple
@@ -638,6 +642,8 @@ def check_webcruiter(target, seen_keys, log: Log = _quiet):
     Covers listings the career page only renders with JavaScript."""
     name = target["name"]
     keywords = lower_list(target, "keywords")
+    exclude = lower_list(target, "exclude_keywords")
+    location_must = lower_list(target, "location_must_contain")
 
     resp = fetch(
         "POST",
@@ -663,9 +669,13 @@ def check_webcruiter(target, seen_keys, log: Log = _quiet):
         haystack = f"{heading} {ad.get('JobCategory') or ''}".lower()
         if not any(k in haystack for k in keywords):
             continue
+        place = (ad.get("Workplace") or "").strip()
+        if exclude and any(e in haystack for e in exclude):
+            continue
+        if location_must and not any(s in f"{haystack} {place.lower()}" for s in location_must):
+            continue
         link = ad.get("OpenAdvertUrl") or target["url"]
         key = f"{name}|webcruiter|{ad.get('Id') or link}"
-        place = (ad.get("Workplace") or "").strip()
         parts = [heading, f"({place})" if place else "", "·", webcruiter_deadline(ad)]
         label = " ".join(p for p in parts if p)
         title = f"{heading} ({place})" if place else heading
@@ -783,16 +793,275 @@ def check_successfactors(target, seen_keys, log: Log = _quiet):
     return CheckResult(hits, open_matches, len(jobs))
 
 
+RSS_ITEM_RE = re.compile(r"<item>(.*?)</item>", re.S)
+
+
+def rss_text(block, tag):
+    """Text of every <tag> in an RSS block, CDATA and entities resolved."""
+    out = []
+    for raw in re.findall(rf"<{tag}(?:\s[^>]*)?>(.*?)</{tag}>", block, re.S):
+        cdata = SF_CDATA_RE.fullmatch(raw.strip())
+        out.append(squash(html.unescape(cdata.group(1) if cdata else raw)))
+    return [t for t in out if t]
+
+
+def check_teamtailor(target, seen_keys, log: Log = _quiet):
+    """Read a Teamtailor career site's RSS feed (…/jobs.rss), which carries a
+    structured location (city, country) for every job.
+
+    Fields in config.json: feed, keywords, exclude_keywords, check_detail,
+    detail_trigger as for the other sources (matched on title + department,
+    the ad body comes with the feed); location_must_contain is matched on the
+    job's city, country and office name, and on the title."""
+    name = target["name"]
+    keywords = lower_list(target, "keywords")
+    exclude = lower_list(target, "exclude_keywords")
+    location_must = lower_list(target, "location_must_contain")
+    check_detail = target.get("check_detail", False)
+    detail_trigger = lower_list(target, "detail_trigger")
+
+    resp = fetch("GET", target["feed"], headers=HEADERS, timeout=30)
+    feed_text = resp.content.decode("utf-8", errors="replace")
+    if "<rss" not in feed_text[:2000] and "<channel" not in feed_text[:2000]:
+        raise SourceError("the feed is not RSS any more, feed address probably changed")
+    items = RSS_ITEM_RE.findall(feed_text)
+    log(f"HTTP {resp.status_code}, {len(resp.content)} bytes, {len(items)} jobs in feed")
+
+    hits, open_matches, run_keys = [], [], set()
+    for item in items:
+        rest = re.sub(r"<description>.*?</description>", "", item, flags=re.S)
+        title = (rss_text(rest, "title") or [""])[0]
+        link = (rss_text(rest, "link") or [target["url"]])[0]
+        guid = (rss_text(rest, "guid") or [link])[0]
+        places = rss_text(rest, "tt:city") + rss_text(rest, "tt:country") + rss_text(rest, "tt:name")
+        department = " ".join(rss_text(rest, "tt:department"))
+        log(f"  JOB {title} | {department} | {', '.join(places)}")
+        if not title:
+            continue
+        low = f"{title} {department}".lower()
+        where = " ".join(places).lower()
+        label = title
+        if exclude and any(e in low for e in exclude):
+            continue
+        if location_must and not any(s in where or s in low for s in location_must):
+            continue
+        if any(k in low for k in keywords):
+            pass
+        elif check_detail and (not detail_trigger or any(k in low for k in detail_trigger)):
+            body = " ".join(BeautifulSoup(d, "html.parser").get_text(" ", strip=True) for d in rss_text(item, "description")).lower()
+            if not body:
+                label += UNREADABLE_TAG
+            elif not any(k in body for k in keywords):
+                continue
+        else:
+            continue
+        key = f"{name}|teamtailor|{guid}"
+        if key in run_keys:
+            continue
+        run_keys.add(key)
+        city = (rss_text(rest, "tt:city") or [""])[0]
+        full = f"{label} ({city})" if city and city.lower() not in label.lower() else label
+        open_matches.append(open_item(key, full, link))
+        if key not in seen_keys:
+            hits.append(Hit(full, link, key))
+    return CheckResult(hits, open_matches, len(items))
+
+
+NAV_API = "https://pam-stilling-feed.nav.no"
+NAV_AD_URL = "https://arbeidsplassen.nav.no/stillinger/stilling/"
+NAV_MAX_PAGES = 20        # feed pages (1000 entries each) read per run, at most
+NAV_MAX_DETAILS = 25      # single ads opened per run, at most
+NAV_BOOTSTRAP_DAYS = 45   # first run: how far back to start reading
+NAV_DRY_RUN_DAYS = 7      # dry run: a recent slice is enough to judge the filter
+
+
+def nav_token():
+    """NAV's feed needs a bearer token. NAV_FEED_TOKEN is your own (registered
+    with NAV); without it the public token NAV publishes is fetched each run,
+    since NAV rotates it."""
+    own = os.environ.get("NAV_FEED_TOKEN", "").strip()
+    if own:
+        return own
+    text = fetch("GET", f"{NAV_API}/api/publicToken", headers={"User-Agent": HEADERS["User-Agent"]}, timeout=30).text
+    token = text.split()[-1] if text.split() else ""
+    if token.count(".") != 2:
+        raise SourceError("could not read NAV's public feed token")
+    return token
+
+
+def check_nav(target, seen_keys, log: Log = _quiet, memory=None):
+    """Follow NAV's official job vacancy feed (https://navikt.github.io/pam-stilling-feed/).
+
+    The feed is a running log of every change to every ad in Norway, oldest
+    first, so this source keeps a bookmark (the feed page to continue from) and
+    its own list of matching ads that are still active, in `memory`, which
+    run_radar stores in seen.json. memory=None (dry run) reads a recent slice.
+
+    Fields in config.json:
+      municipals             ad's municipality must be one of these (e.g. ULLENSAKER) …
+      location_must_contain  … or the title must contain one of these
+      keywords               role words that are enough on their own (flyekspeditør, check-in)
+      keywords_at_airport    everyday words (kundeservice, servicemedarbeider) that only
+                             count when the ad itself is at the airport: one of
+      airport_words          must be in its title, employer, work address or text.
+                             The municipality also holds a whole town of shops.
+      exclude_keywords       matched on the ad title
+      exclude_employers      skip employers the radar already follows directly
+    """
+    name = target["name"]
+    keywords = lower_list(target, "keywords")
+    exclude = lower_list(target, "exclude_keywords")
+    municipals = {str(m).upper() for m in target.get("municipals", [])}
+    location_must = lower_list(target, "location_must_contain")
+    skip_employers = lower_list(target, "exclude_employers")
+    soft_keywords = lower_list(target, "keywords_at_airport")
+    airport_words = lower_list(target, "airport_words")
+
+    def wanted(entry):
+        """'yes', 'airport' (yes if the ad turns out to be at the airport) or ''."""
+        title = (entry.get("title") or "").lower()
+        employer = (entry.get("businessName") or "").lower()
+        if (entry.get("municipal") or "").upper() not in municipals and not any(s in title for s in location_must):
+            return ""
+        if any(e in employer for e in skip_employers) or any(e in title for e in exclude):
+            return ""
+        if any(k in title for k in keywords):
+            return "yes"
+        if any(k in title for k in soft_keywords):
+            return "yes" if any(w in f"{title} {employer}" for w in airport_words) else "airport"
+        return ""
+
+    def at_airport(content):
+        places = " ".join(" ".join(str(v) for v in loc.values() if v) for loc in content.get("workLocations") or [] if isinstance(loc, dict))
+        text = BeautifulSoup(content.get("description") or "", "html.parser").get_text(" ", strip=True)
+        blob = f"{content.get('title')} {(content.get('employer') or {}).get('name')} {places} {text}".lower()
+        return any(w in blob for w in airport_words)
+
+    headers = {"Accept": "application/json", "Authorization": f"Bearer {nav_token()}", "User-Agent": HEADERS["User-Agent"]}
+    dry = memory is None
+    state = memory or {}
+    open_ads = {k: dict(v) for k, v in (state.get("open") or {}).items()}
+    cursor = state.get("cursor")
+    if cursor:
+        url, extra = f"{NAV_API}/api/v1/feed/{cursor}", {}
+    else:
+        since = now_utc() - timedelta(days=NAV_DRY_RUN_DAYS if dry else NAV_BOOTSTRAP_DAYS)
+        url, extra = f"{NAV_API}/api/v1/feed", {"If-Modified-Since": format_datetime(since, usegmt=True)}
+
+    pages = entries = 0
+    caught_up = False
+    while pages < NAV_MAX_PAGES:
+        resp = fetch("GET", url, headers={**headers, **extra}, timeout=40)
+        extra = {}
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise SourceError("NAV feed did not answer with JSON") from exc
+        if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+            raise SourceError("NAV feed answer has no 'items' list, API probably changed")
+        pages += 1
+        for item in data["items"]:
+            entry = (item.get("_feed_entry") if isinstance(item, dict) else None) or {}
+            uuid = entry.get("uuid")
+            if not uuid:
+                continue
+            entries += 1
+            verdict = wanted(entry) if entry.get("status") == "ACTIVE" else ""
+            if not verdict:
+                open_ads.pop(uuid, None)   # stopped, expired, or edited so it no longer matches
+                continue
+            known = open_ads.get(uuid)
+            if known and known.get("changed") == entry.get("sistEndret"):
+                continue
+            open_ads[uuid] = {
+                "pending": verdict == "airport",   # not shown until the ad itself confirms the airport
+                "title": squash(entry.get("title")),
+                "employer": squash(entry.get("businessName")),
+                "changed": entry.get("sistEndret"),
+                "link": NAV_AD_URL + uuid,
+                "due": (known or {}).get("due", ""),
+                "deadline": (known or {}).get("deadline"),
+                "expires": (known or {}).get("expires"),
+                "detailed": False,
+            }
+        if data.get("next_url") and data.get("next_id"):
+            cursor = data["next_id"]
+            url = NAV_API + data["next_url"]
+        else:
+            cursor = data.get("id") or cursor   # the newest page: read it again next run, it grows
+            caught_up = True
+            break
+    log(f"read {pages} feed page(s), {entries} ad changes" + ("" if caught_up else ", still catching up (continues next run)"))
+
+    # open the few ads that matched, for deadline and expiry
+    opened = 0
+    for uuid, ad in sorted(open_ads.items()):
+        if ad.get("detailed") or opened >= NAV_MAX_DETAILS:
+            continue
+        opened += 1
+        try:
+            detail = fetch("GET", f"{NAV_API}/api/v1/feedentry/{uuid}", headers=headers, timeout=40).json()
+        except (requests.RequestException, ValueError):
+            continue   # try again next run; the ad still alerts with what the feed gave us
+        content = detail.get("ad_content") if isinstance(detail, dict) else None
+        if not isinstance(content, dict) or detail.get("status") != "ACTIVE":
+            open_ads.pop(uuid, None)
+            continue
+        if ad.get("pending"):
+            if at_airport(content):
+                ad["pending"] = False
+            else:   # a shop in town: remember the verdict so the ad is not opened again every run
+                ad.update({"detailed": True, "rejected": True, "expires": content.get("expires")})
+                continue
+        ad.update({
+            "title": squash(content.get("title")) or ad["title"],
+            "employer": squash((content.get("employer") or {}).get("name")) or ad["employer"],
+            "due": squash(content.get("applicationDue")),
+            "deadline": parse_deadline(content.get("applicationDue")),
+            "expires": content.get("expires"),
+            "link": content.get("link") or ad["link"],
+            "detailed": True,
+        })
+
+    now = now_utc()
+    for uuid, ad in list(open_ads.items()):
+        try:
+            if ad.get("expires") and datetime.fromisoformat(ad["expires"]) < now:
+                open_ads.pop(uuid)
+        except (ValueError, TypeError):
+            pass
+
+    hits, open_matches = [], []
+    for uuid, ad in sorted(open_ads.items()):
+        if ad.get("pending") or ad.get("rejected"):
+            continue
+        title = f"{ad['title']} ({ad['employer']})" if ad.get("employer") else ad["title"]
+        label = f"{title} · frist {ad['due']}" if ad.get("due") else title
+        key = f"{name}|nav|{uuid}"
+        log(f"  MATCH {label}")
+        open_matches.append(open_item(key, title, ad["link"], label, ad.get("deadline")))
+        if key not in seen_keys:
+            hits.append(Hit(label, ad["link"], key))
+    if memory is not None:   # only now, so a failed read never leaves a half-updated bookmark
+        memory.clear()
+        memory.update({"cursor": cursor, "open": open_ads})
+    return CheckResult(hits, open_matches, None)
+
+
 SOURCES = {
     "webcruiter": check_webcruiter,
     "successfactors": check_successfactors,
+    "teamtailor": check_teamtailor,
 }
 
 
-def check(target, seen_keys, log: Log = _quiet):
+def check(target, seen_keys, log: Log = _quiet, memory=None):
+    """memory: a dict the source may keep between runs (None in a dry run)."""
     kind = target.get("type") or "html"
     if kind == "html":
         return check_html(target, seen_keys, log)
+    if kind == "nav":
+        return check_nav(target, seen_keys, log, memory)
     if kind not in SOURCES:
         raise SourceError(f"unknown target type '{kind}' in config.json")
     return SOURCES[kind](target, seen_keys, log)
@@ -1099,6 +1368,7 @@ def run_radar(cfg, force_heartbeat=False):
     seen_keys = set(state.get("seen", []))
     fail_counts = state.get("fail", {})
     alerts = state.get("alerts", [])
+    source_memory = state.get("sources", {})   # bookmarks some sources keep between runs
     prev_status = load_json(STATUS_PATH, {})
     prev_open = {t["name"]: t.get("open", []) for t in prev_status.get("targets", [])}
 
@@ -1114,7 +1384,7 @@ def run_radar(cfg, force_heartbeat=False):
         name = target.get("name", "?")
         before = fail_counts.get(name, 0)
         try:
-            result = check(target, seen_keys)
+            result = check(target, seen_keys, memory=source_memory.setdefault(name, {}))
         except Exception as exc:  # noqa: BLE001 - one broken target must never stop the others
             error = short_error(exc)
             fail_counts[name] = before + 1
@@ -1204,6 +1474,7 @@ def run_radar(cfg, force_heartbeat=False):
         "alerts": alerts,
         "heartbeat_week": heartbeat_week,
         "last_counts": last_counts,
+        "sources": {k: v for k, v in source_memory.items() if v},
     })
     stamp = now_iso()
     hint = {}
