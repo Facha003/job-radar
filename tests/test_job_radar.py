@@ -1784,3 +1784,30 @@ def test_nav_ads_carry_their_facts_without_an_extra_request():
     facts = jr.nav_facts({"title": "Servicemedarbeider", "description": "<p>Vi søker i <b>80 % stilling</b>, vikariat. Turnus.</p>",
                           "extent": "Deltid", "employer": {"name": "Stille AS"}, "expires": None})
     assert (facts["percent"], facts["contract"], facts["tags"]) == ("80 %", "VIKARIAT", ["SKIFT"])
+
+
+# ------------------------------------------------------- hiring windows
+
+def test_hiring_windows_are_cleaned_for_the_dashboard():
+    cfg = {"windows": [
+        {"label": " SAS  sommer ", "note": "sist 28. desember", "target": "sas", "opens": "2026-12-28"},
+        {"label": "Løpende", "target": "iss", "opens": None},
+        {"label": "Feil dato", "opens": "desember"},
+        {"note": "uten navn"}, "tull", None,
+    ]}
+    assert jr.hiring_windows(cfg) == [
+        {"label": "SAS sommer", "note": "sist 28. desember", "target": "sas", "opens": "2026-12-28"},
+        {"label": "Løpende", "note": "", "target": "iss", "opens": None},
+        {"label": "Feil dato", "note": "", "target": "", "opens": None},
+    ]
+    assert jr.hiring_windows({}) == [] and jr.hiring_windows({"windows": None}) == []
+
+
+def test_real_config_windows_point_at_real_targets_and_reach_status(monkeypatch):
+    ids = {t["id"] for t in CONFIG["targets"]}
+    windows = jr.hiring_windows(CONFIG)
+    assert len(windows) >= 6 and all(w["target"] in ids for w in windows)
+    no_heartbeat()
+    fake_sources(monkeypatch, {"Alpha": result_with(), "Beta": result_with()})
+    jr.run_radar(dict(two_targets(), windows=CONFIG["windows"]))
+    assert status()["windows"] == windows

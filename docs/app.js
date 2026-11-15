@@ -1,5 +1,5 @@
 "use strict";
-/* JOBBRADAR, versjon 4.
+/* JOBBRADAR, versjon 6.
    Leser status.json og jobs.json som radaren skriver, og legger ditt eget lag
    oppå: søknadsstatus, notater og stempler. Det laget ligger bare i nettleseren. */
 
@@ -123,6 +123,16 @@ function statusVelger(key, verdi) {
     STATUSER.map(s => `<option${s === verdi ? " selected" : ""}>${s}</option>`).join("") + `</select>`;
 }
 
+/* det radaren leste i selve annonsen: stillingsprosent, ansettelse, krav */
+function faktaBrikker(j) {
+  const d = j && j.details;
+  if (!d || typeof d !== "object") return "";
+  const hoved = [d.percent, d.contract].filter(Boolean), krav = Array.isArray(d.tags) ? d.tags : [];
+  if (!hoved.length && !krav.length) return "";
+  return `<div class="fakta">` + hoved.map(t => `<span class="brikke hoved">${esc(t)}</span>`).join("")
+    + krav.map(t => `<span class="brikke">${esc(t)}</span>`).join("") + `</div>`;
+}
+
 /* ---------- NÅ: åpne stillinger ---------- */
 function visJobber() {
   const aapne = JOBS.filter(j => j.state === "open");
@@ -147,11 +157,13 @@ function visJobber() {
   $("jobber").innerHTML = liste.length ? liste.map(j => {
     const s = jobbStatus(j.key), f = fristInfo(j.deadline), d = jobbLagret(j.key);
     const dempet = FERDIG.includes(s);
-    return `<div class="jobb${f.haster && !dempet && s !== "SØKT" ? " haster" : ""}${dempet ? " dempet" : ""}">
+    return `<div class="jobb${f.haster && !dempet && s !== "SØKT" ? " haster" : ""}${dempet ? " dempet" : ""}" data-kort="${esc(j.key)}">
       <div class="jtop"><span class="frist ${f.klasse}"${dagerTil(j.deadline) === 0 ? ` data-siste="${esc(j.deadline)}"` : ""}>${esc(f.tekst)}</span>${statusVelger(j.key, s)}</div>
       <a class="jtittel" href="${trygLenke(j.link)}" target="_blank" rel="noopener">${esc(j.title || j.text)}</a>
       <div class="jmeta"><b>${esc(maalNavn(j.target))}</b> · SETT FØRSTE GANG ${esc(kortDato(j.first_seen))} (${esc(relTid(j.first_seen).toUpperCase())})</div>
+      ${faktaBrikker(j)}
       <textarea class="notat" data-jnotat="${esc(j.key)}" placeholder="Notat. F.eks: søkt 14.11, ringte leder, venter svar …">${esc(d ? d.notat : "")}</textarea>
+      <div class="jfot"><button class="btn smal" data-kort="${esc(j.key)}">Boardingkort</button></div>
     </div>`;
   }).join("") : `<div class="tom">${aapne.length ? "INGEN STILLINGER MED DENNE STATUSEN." : "INGEN STILLINGER DU VIL HA ER UTE NÅ. STILLE ER OGSÅ ET SVAR."}</div>`;
 
@@ -178,11 +190,143 @@ function visSoknader() {
   $("mine").innerHTML = mine.length ? `<div class="rader">` + mine.map(j => {
     const lukket = j.state !== "open";
     const info = lukket ? "UTLYSNING LUKKET" : fristInfo(j.deadline).tekst;
-    return `<div class="rad"><div class="rn"><a href="${trygLenke(j.link)}" target="_blank" rel="noopener">${esc(j.title || j.text)}</a>
+    return `<div class="rad" data-kort="${esc(j.key)}"><div class="rn"><a href="${trygLenke(j.link)}" target="_blank" rel="noopener">${esc(j.title || j.text)}</a>
       <small>${esc(maalNavn(j.target))} · ${esc(info)}</small></div>
       <div class="rd">${statusVelger(j.key, jobbStatus(j.key))}</div></div>`;
   }).join("") + `</div>` : `<div class="tom">INGEN SØKNADER I GANG. SETT STATUS PÅ EN STILLING OVER, SÅ HAVNER DEN HER.</div>`;
 }
+
+/* ---------- OVERSIKT: tallene øverst på bred skjerm ---------- */
+function nesteFrist() {
+  return JOBS.filter(j => j.state === "open" && !FERDIG.includes(jobbStatus(j.key)) && (dagerTil(j.deadline) ?? -1) >= 0)
+    .sort((a, b) => a.deadline.localeCompare(b.deadline))[0] || null;
+}
+function visOversikt() {
+  const el = $("oversikt");
+  if (!el) return;
+  const aapne = JOBS.filter(j => j.state === "open").length;
+  const tall = {};
+  for (const j of alleSporede()) { const s = jobbStatus(j.key); tall[s] = (tall[s] || 0) + 1; }
+  const rute = (n, navn, til) => `<a class="tall${n ? " har" : ""}" href="#${til}"><div class="n">${n}</div><div class="l">${navn}</div></a>`;
+  const neste = nesteFrist(), d = neste ? dagerTil(neste.deadline) : null;
+  el.innerHTML = rute(aapne, "LEDIG", "naa")
+    + ["SKAL SØKE", "SØKT", "INTERVJU"].concat(tall.TILBUD ? ["TILBUD"] : []).map(s => rute(tall[s] || 0, s, "soknader")).join("")
+    + (neste
+      ? `<a class="tall har bred${d <= 3 ? " haster" : ""}" href="#jobb=${encodeURIComponent(neste.key)}" data-kort="${esc(neste.key)}">
+          <div class="n"${d === 0 ? ` data-ned="${esc(neste.deadline)}"` : ""}>${d === 0 ? "I DAG" : d === 1 ? "1 DAG" : d + " DAGER"}</div>
+          <div class="l">NESTE FRIST · ${esc(kortDato(neste.deadline))} · ${esc(String(neste.title || neste.text || "").toUpperCase())}</div></a>`
+      : `<div class="tall bred"><div class="n">–</div><div class="l">NESTE FRIST · INGEN KJENT</div></div>`);
+}
+
+/* ---------- VINDUER: når arbeidsgiverne pleier å lyse ut (dine anslag, fra config.json) ---------- */
+function vinduStatus(w) {
+  if (!w || !w.opens) return { d: null, tekst: "LØPENDE" };
+  const d = dagerTil(w.opens);
+  if (d === null) return { d: null, tekst: "LØPENDE" };
+  return { d, tekst: d > 1 ? "OM " + d + " DAGER" : d >= -90 ? "NÅ" : "PASSERT" };
+}
+function visVinduer() {
+  const el = $("vinduliste");
+  if (!el) return;
+  const v = STATUS && Array.isArray(STATUS.windows) ? STATUS.windows : null;
+  if (!v) { el.innerHTML = `<div class="tom">VINDUENE KOMMER MED RADARSTATUS VED NESTE SJEKK.</div>`; return; }
+  el.innerHTML = v.length ? `<div class="rader">` + v.map(w =>
+    `<div class="rad"><div class="rn">${esc(w.label)}<small>${esc(w.note || "")}</small></div><div class="rd">${esc(vinduStatus(w).tekst)}</div></div>`).join("") + `</div>`
+    : `<div class="tom">INGEN VINDUER LAGT INN I config.json.</div>`;
+}
+
+/* ---------- BOARDINGKORT: én stilling i detalj ---------- */
+const REPO = "https://github.com/Facha003/job-radar";
+let aapentKort = null, kortSjekket = false;
+
+function kortHtml(j) {
+  const s = jobbStatus(j.key), d = jobbLagret(j.key), f = fristInfo(j.deadline);
+  const det = j.details && typeof j.details === "object" ? j.details : null;
+  const lukket = j.state !== "open";
+  const felt = (navn, html) => `<div class="pfelt"><small>${navn}</small><b>${html}</b></div>`;
+  const krav = det && Array.isArray(det.tags) && det.tags.length
+    ? det.tags.map(t => `<span class="brikke">${esc(t)}</span>`).join("") : `<span class="pingen">${det ? "INGEN FUNNET" : "–"}</span>`;
+  const sak = Number.isInteger(j.issue) && j.issue > 0 ? j.issue : null;
+  return `<div class="phode"><span>BOARDINGKORT · JOBBRADAR</span><button class="plukk" data-lukk aria-label="Lukk boardingkortet">✕</button></div>
+    <div class="pkropp">
+      <div class="pfelt"><small>ARBEIDSGIVER</small><b class="parb">${esc(maalNavn(j.target).toUpperCase() || "UKJENT")}</b></div>
+      <div class="ptittel" id="passtittel">${esc(j.title || j.text || "Stillingen er ikke i radarens minne lenger")}</div>
+      <div class="pgrid">
+        ${felt("FRIST", lukket ? `<span class="frist ute">UTLYSNING LUKKET</span>`
+          : `<span class="frist ${f.klasse}"${dagerTil(j.deadline) === 0 ? ` data-siste="${esc(j.deadline)}"` : ""}>${esc(f.tekst)}</span>`)}
+        ${felt("FØRST SETT", j.first_seen ? esc(kortDato(j.first_seen)) + " · " + esc(relTid(j.first_seen).toUpperCase()) : "–")}
+        ${felt("STILLING", det && det.percent ? esc(det.percent) : "–")}
+        ${felt("ANSETTELSE", det && det.contract ? esc(det.contract) : "–")}
+      </div>
+      <div class="pfelt"><small>KRAV NEVNT I ANNONSEN</small><div class="fakta">${krav}</div></div>
+      <div class="plest">${det ? "RADAREN LESTE ANNONSEN " + esc(kortDato(det.read)) + ". LES ALLTID ANNONSEN SELV FØR DU SØKER."
+        : lukket ? "ANNONSEN BLE IKKE LEST AV RADAREN." : "IKKE LEST ENNÅ. RADAREN LESER ANNONSEN VED NESTE SJEKK."}</div>
+    </div>
+    <div class="priv" aria-hidden="true"></div>
+    <div class="pstubb">
+      <div class="pfelt"><small>DIN STATUS</small>${statusVelger(j.key, s)}</div>
+      <textarea class="notat" data-jnotat="${esc(j.key)}" aria-label="Notat" placeholder="Notat. F.eks: søkt 14.11, ringte leder, venter svar …">${esc(d ? d.notat : "")}</textarea>
+      <a class="btn gul psok" href="${trygLenke(j.link)}" target="_blank" rel="noopener">${lukket ? "ÅPNE ANNONSEN" : "SØK · ÅPNE ANNONSEN"} ↗</a>
+      ${sak ? `<a class="pissue" href="${REPO}/issues/${sak}" target="_blank" rel="noopener">VARSELET PÅ GITHUB (SAK ${sak}) · LUKK SAKEN DER, SÅ SLUTTER PÅMINNELSENE ↗</a>` : ""}
+      <div class="pstrek" aria-hidden="true"></div>
+      <div class="pprivat">STATUS OG NOTAT LIGGER BARE I DENNE NETTLESEREN.</div>
+    </div>`;
+}
+function visKort() {
+  if (aapentKort === null) return;
+  $("pass").innerHTML = kortHtml(finnJobb(aapentKort));
+}
+/* fraAdresse: åpnet av adressen selv (lenke, tilbakeknapp), så historikken skal ikke røres */
+function aapneKort(key, fraAdresse) {
+  if (!alleSporede().some(j => j.key === key)) return false;
+  aapentKort = key;
+  visKort();
+  $("kort").hidden = false;
+  document.body.classList.add("kortaapent");
+  const h = "#jobb=" + encodeURIComponent(key);
+  if (!fraAdresse && location.hash !== h) { try { history.pushState({ kort: key }, "", h); } catch (e) {} }
+  $("pass").scrollTop = 0;
+  $("pass").focus();
+  return true;
+}
+function lukkKort(fraAdresse) {
+  if (aapentKort === null) return;
+  const key = aapentKort;
+  aapentKort = null;
+  $("kort").hidden = true;
+  $("pass").innerHTML = "";
+  document.body.classList.remove("kortaapent");
+  if (!fraAdresse && location.hash.startsWith("#jobb=")) {
+    try {
+      if (history.state && history.state.kort) history.back();
+      else history.replaceState(null, "", location.pathname + location.search);
+    } catch (e) {}
+  }
+  visJobber(); visSoknader();   // et notat skrevet på kortet skal stå på jobbkortet også
+  const tilbake = document.querySelector(`#jobber button[data-kort="${CSS.escape(key)}"]`);
+  if (tilbake) tilbake.focus({ preventScroll: true });
+}
+function kortFraAdresse() {
+  const m = /^#jobb=(.+)$/.exec(location.hash);
+  let key = null;
+  if (m) { try { key = decodeURIComponent(m[1]); } catch (e) {} }
+  if (key !== null && aapneKort(key, true)) return;
+  if (m && STATUS) { try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {} }   // ukjent stilling
+  lukkKort(true);
+}
+window.addEventListener("popstate", kortFraAdresse);
+window.addEventListener("hashchange", kortFraAdresse);
+document.addEventListener("keydown", e => {
+  if (aapentKort === null) return;
+  if (e.key === "Escape") { e.preventDefault(); lukkKort(); return; }
+  if (e.key !== "Tab") return;
+  /* hold fokus inne på kortet mens det er åpent */
+  const pass = $("pass"), f = [...pass.querySelectorAll("a[href],button,select,textarea")];
+  if (!f.length) return;
+  const a = document.activeElement, inne = pass.contains(a) && a !== pass;
+  if (e.shiftKey && (!inne || a === f[0])) { e.preventDefault(); f[f.length - 1].focus(); }
+  else if (!e.shiftKey && (!inne || a === f[f.length - 1])) { e.preventDefault(); f[0].focus(); }
+});
 
 /* ---------- TAVLE: arbeidsgiverne ---------- */
 const GAMLE_ID = [[/vy/i, "vy"], [/iss/i, "iss"], [/sas/i, "sas"], [/norwegian/i, "norwegian"], [/wider/i, "wideroe"]];
@@ -274,7 +418,12 @@ function visHelse() {
     : `<div class="tom">INGEN TREFF I RADARLOGGEN.</div>`;
 }
 
-function visAlt() { visJobber(); visSoknader(); visTavle(); visHistorikk(); visHelse(); if (window.display) display.render(); }
+function visAlt() {
+  visJobber(); visSoknader(); visOversikt(); visTavle(); visVinduer(); visHistorikk(); visHelse();
+  /* kortet tegnes om med ny data, men ikke mens du skriver på det */
+  if (aapentKort !== null && !$("pass").contains(document.activeElement)) visKort();
+  if (window.display) display.render();
+}
 
 /* ---------- hent status.json og jobs.json ---------- */
 async function hent(fil) {
@@ -320,6 +469,7 @@ async function lastStatus(stille) {
   window.radarEndret = sistGenerert !== null && ny !== null && ny !== sistGenerert;
   if (ny) sistGenerert = ny;
   visAlt();
+  if (!kortSjekket && STATUS) { kortSjekket = true; kortFraAdresse(); }   // siden ble åpnet med en lenke rett til en stilling
   if (!STATUS) $("jobber").innerHTML = `<div class="tom">FANT IKKE status.json. KJØR SIDEN PÅ GITHUB PAGES SAMMEN MED RADAREN FOR SANNTID.</div>`;
 }
 $("oppdater").addEventListener("click", () => lastStatus());
@@ -335,8 +485,10 @@ document.addEventListener("change", e => {
   const el = e.target;
   if (el.dataset.jstatus !== undefined) {
     lagreJobb(finnJobb(el.dataset.jstatus), { status: el.value });
-    el.blur();
-    visJobber(); visSoknader(); visHistorikk();
+    const paaKortet = $("pass").contains(el);
+    if (paaKortet) el.className = "flap " + (FLAP_FARGE[el.value] || "");   // kortet står: bare fargen følger med
+    else el.blur();
+    visJobber(); visSoknader(); visOversikt(); visHistorikk();
     if (window.display) display.render();
   } else if (el.dataset.mstatus !== undefined) {
     lagreMaal(el.closest(".brow"));
@@ -349,6 +501,17 @@ document.addEventListener("input", e => {
   else if (el.dataset.mnotat !== undefined) lagreMaal(el.closest(".brow"));
 });
 document.addEventListener("click", e => {
+  if (e.target.closest("[data-lukk]")) { e.preventDefault(); lukkKort(); return; }
+  /* boardingkort: knappen, eller et trykk på selve kortet/raden utenom lenker og felt */
+  const k = e.target.closest("[data-kort]");
+  if (k && !(window.display && display.er())) {
+    const direkte = e.target.closest("button[data-kort],a[data-kort]");
+    if (direkte || (!e.target.closest("a,button,select,textarea,input") && !String(window.getSelection && getSelection()))) {
+      e.preventDefault();
+      aapneKort(k.dataset.kort);
+      return;
+    }
+  }
   const el = e.target.closest("[data-filter],[data-stemple]");
   if (!el) return;
   if (el.dataset.filter !== undefined) { store.set("radar.filter", el.dataset.filter); visJobber(); }
@@ -366,11 +529,25 @@ function lagreMaal(rad) {
   });
 }
 
-/* ---------- vinduer nedtelling ---------- */
-document.querySelectorAll("[data-frist]").forEach(el => {
-  const d = Math.ceil((Date.parse(el.dataset.frist) - Date.now()) / 86400000);
-  el.textContent = d > 1 ? "OM " + d + " DAGER" : (d >= -90 ? "NÅ" : "PASSERT");
+/* ---------- tema: AUTO følger telefonens lys/mørk, ellers det du har valgt ---------- */
+const TEMAER = ["auto", "mork", "lys", "skilt"], TEMANAVN = { auto: "AUTO", mork: "MØRK", lys: "LYS", skilt: "SKILT" };
+function valgtTema() { const t = store.get("radar.tema", "auto"); return TEMAER.includes(t) ? t : "auto"; }
+function brukTema() {
+  const t = valgtTema();
+  const lyst = !!(window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches);
+  document.documentElement.setAttribute("data-tema", t === "auto" ? (lyst ? "lys" : "mork") : t);
+  $("temaknapp").textContent = "TEMA: " + TEMANAVN[t];
+  const meta = document.querySelector('meta[name="theme-color"]');
+  const topp = getComputedStyle(document.documentElement).getPropertyValue("--topp").trim();
+  if (meta && topp) meta.setAttribute("content", topp);
+}
+$("temaknapp").addEventListener("click", e => {
+  e.preventDefault();
+  store.set("radar.tema", TEMAER[(TEMAER.indexOf(valgtTema()) + 1) % TEMAER.length]);
+  brukTema();
 });
+try { matchMedia("(prefers-color-scheme: light)").addEventListener("change", brukTema); } catch (e) {}
+brukTema();
 
 /* ---------- sikkerhetskopi ---------- */
 const melding = t => { $("kopimelding").textContent = t; };
@@ -387,6 +564,7 @@ function hentInn(tekst) {
   if (!felt.length) return melding("KOPIEN ER TOM.");
   if (!confirm("Hente inn " + felt.length + " lagrede felt fra kopien" + (kopi.laget ? " (laget " + new Date(kopi.laget).toLocaleString("nb-NO") + ")" : "") + "? Felt med samme navn her blir overskrevet.")) return;
   for (const [k, v] of felt) store.set(k, v);
+  brukTema();
   visAlt();
   melding("HENTET INN " + felt.length + " FELT.");
 }

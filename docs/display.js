@@ -1,5 +1,5 @@
 "use strict";
-/* JOBBRADAR, versjon 5: alt som beveger seg.
+/* JOBBRADAR, versjon 6: alt som beveger seg.
    Radarskjerm, avgangstavle med vippebokstaver, logg, løpende tekst, trendlinjer, TV-modus.
    Ingenting her er pynt uten dekning: sveipet går over ekte status, tavla viser ekte
    stillinger, loggen er det radaren faktisk gjorde, og klokkene teller ekte tid.
@@ -11,6 +11,13 @@ const display = (() => {
   const kortNavn = t => String((t && (t.label || t.name)) || "").split("·")[0].trim().split(/\s+/)[0].toUpperCase();
   const maalFor = navn => ((STATUS && STATUS.targets) || []).find(t => t.name === navn);
   const to = n => String(n).padStart(2, "0");
+  const maalMedId = id => ((STATUS && STATUS.targets) || []).find(t => t.id === id);
+  /* "ny i denne sjekken": først sett i minuttene før status ble skrevet. Varselet
+     stemples noen sekunder før status.json, så likhet på sekundet holder ikke. */
+  const nyISjekken = j => {
+    const ms = Date.parse(STATUS && STATUS.generated) - Date.parse(j.first_seen);
+    return ms >= 0 && ms < 10 * 60 * 1000;
+  };
   const klokke = iso => { const d = new Date(iso); return isNaN(d) ? "" : to(d.getHours()) + ":" + to(d.getMinutes()); };
 
   /* ================= radarskjerm ================= */
@@ -19,7 +26,6 @@ const display = (() => {
     if (!el) return;
     const maal = (STATUS && STATUS.targets) || [];
     if (!maal.length) { el.innerHTML = `<div class="tom">INGEN RADARDATA.</div>`; return; }
-    const ferske = STATUS.generated;
     const indre = maal.filter(t => t.id !== "nav"), ytre = maal.filter(t => t.id === "nav");
     const plasser = [];
     indre.forEach((t, i) => plasser.push({ t, vinkel: (i * 360 / indre.length + 24) % 360, r: i % 2 ? 66 : 44 }));
@@ -28,7 +34,7 @@ const display = (() => {
     const blipper = plasser.map(({ t, vinkel, r }) => {
       const rad = (vinkel - 90) * Math.PI / 180, x = +(Math.cos(rad) * r).toFixed(1), y = +(Math.sin(rad) * r).toFixed(1);
       const aapne = JOBS.filter(j => j.state === "open" && j.target === t.name);
-      const nytt = aapne.some(j => j.first_seen === ferske);
+      const nytt = aapne.some(nyISjekken);
       const klasse = !t.ok ? "feil" : aapne.length ? "ledig" : "ok";
       const tips = (t.label || t.name) + ": " + (!t.ok ? "FEIL · " + (t.error || "svarer ikke") : aapne.length ? aapne.length + " ledig" : "OK, ingen ønskede stillinger ute");
       const venstre = x < -8;
@@ -45,7 +51,7 @@ const display = (() => {
 
     const ledig = JOBS.filter(j => j.state === "open").length, feil = maal.filter(t => !t.ok).length;
     el.innerHTML = `<svg viewBox="-118 -112 236 224" role="img" aria-label="Radarskjerm: ${maal.length} kilder, ${ledig} ledig, ${feil} feiler">
-      <defs><linearGradient id="hale" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3ec97e" stop-opacity="0"/><stop offset="1" stop-color="#3ec97e" stop-opacity=".34"/></linearGradient></defs>
+      <defs><linearGradient id="hale" x1="0" y1="0" x2="1" y2="0"><stop class="halestopp" offset="0" stop-opacity="0"/><stop class="halestopp" offset="1" stop-opacity=".34"/></linearGradient></defs>
       <circle class="skive" r="104"/>
       <g class="rutenett"><circle r="34"/><circle r="69"/><circle r="104"/><path d="M-104 0H104M0-104V104"/></g>
       <g class="sveip"><path d="M0 0 L-52 -90.07 A104 104 0 0 1 0 -104 Z" fill="url(#hale)"/><path class="straale" d="M0 0V-104"/></g>
@@ -82,14 +88,29 @@ const display = (() => {
       else if (d !== null && d <= 3) { status = "BOARDING"; klasse = "gul"; }
       if (egen !== "NY") { status = egen; klasse = egen === "SKAL SØKE" ? (klasse || "gul") : "gronn"; }
       const frist = d === null ? "UKJENT" : d === 0 ? nedtelling(j.deadline) : j.deadline.slice(8, 10) + "." + j.deadline.slice(5, 7);
-      return { key: j.key, klasse, ny: j.first_seen === (STATUS && STATUS.generated), lenke: j.link,
+      return { key: j.key, klasse, ny: nyISjekken(j), lenke: j.link,
         sett: kortDato(j.first_seen), arb: kortNavn(maalFor(j.target) || { name: j.target }), stilling: j.title || j.text || "", frist, status };
     });
-    if (aapne.length > 8) rader.push({ key: "+", klasse: "graa", melding: "OG " + (aapne.length - 8) + " TIL · SE LEDIG NÅ UNDER" });
-    if (!aapne.length) rader.push({ key: "tom", klasse: "graa", melding: "INGEN AVGANGER · RADAREN LYTTER" });
+    if (aapne.length > 8) rader.push({ key: "+", klasse: "graa", melding: "OG " + (aapne.length - 8) + " TIL · SE LEDIG NÅ UNDER", kort: "OG " + (aapne.length - 8) + " TIL" });
+    if (!aapne.length) rader.push({ key: "tom", klasse: "graa", melding: "INGEN AVGANGER · RADAREN LYTTER", kort: "INGEN AVGANGER" });
     JOBS.filter(j => j.state === "closed").sort((a, b) => String(b.closed_at || "").localeCompare(String(a.closed_at || ""))).slice(0, 2)
       .forEach(j => rader.push({ key: j.key, klasse: "avgaatt", lenke: j.link, sett: kortDato(j.first_seen), arb: kortNavn(maalFor(j.target) || { name: j.target }),
         stilling: j.title || j.text || "", frist: kortDato(j.closed_at), status: "AVGÅTT" }));
+    /* få stillinger ute: fyll tavla med når arbeidsgiverne pleier å lyse ut. Det er
+       anslag fra config.json, så de står under en egen strek og aldri over en ekte stilling. */
+    const ledigPlass = 6 - Math.max(1, aapne.length);
+    const vinduer = (STATUS && Array.isArray(STATUS.windows)) ? STATUS.windows : [];
+    if (ledigPlass > 0 && vinduer.length) {
+      const ventes = vinduer.map((w, i) => ({ w, i, d: w.opens ? dagerTil(w.opens) : null }))
+        .filter(v => v.d === null || v.d >= -90)
+        .sort((a, b) => (a.d === null) - (b.d === null) || a.d - b.d || a.i - b.i)
+        .slice(0, ledigPlass);
+      if (ventes.length) rader.push({ key: "skille", skille: "VENTES · ANSLAG FRA TIDLIGERE ÅR" });
+      ventes.forEach(({ w, i, d }) => rader.push({ key: "v" + i, klasse: "ventes", vindu: true, sett: "",
+        arb: kortNavn(maalMedId(w.target) || { name: w.target }), stilling: w.label,
+        frist: w.opens ? w.opens.slice(8, 10) + "." + w.opens.slice(5, 7) : "",
+        status: d === null ? "LØPENDE" : d > 1 ? "OM " + d + " D" : "ÅPENT NÅ" }));
+    }
     return rader;
   }
   const fyll = (s, n) => String(s || "").toUpperCase().replace(/\s+/g, " ").slice(0, n).padEnd(n, " ");
@@ -116,27 +137,30 @@ const display = (() => {
     if (!el) return;
     const o = oppsett(el), rader = tavleRader();
     const linjetekst = (rad, linje) => rad.melding !== undefined
-      ? (linje === o.linjer[0] ? fyll(rad.melding, o.n) : null)
+      ? (linje === o.linjer[0] ? fyll(rad.melding.length <= o.n ? rad.melding : rad.kort, o.n) : null)   // smal tavle: kort beskjed, ikke en avkuttet
       : linje.map(([felt, bredde]) => fyll(rad[felt], bredde)).join(" ");
     const hode = `<div class="fhode">` + o.linjer[o.linjer.length - 1].map(([felt, bredde]) =>
       `<span style="width:${(bredde * cellebredde).toFixed(1)}px">${TITLER[felt]}</span>`).join(`<span style="width:${cellebredde.toFixed(1)}px"></span>`) + `</div>`;
 
     /* behold cellene som finnes, så bare det som er endret vipper. En celle som
-       fortsatt ruller regnes som ulandet (null), så den ruller videre etter omtegning. */
+       fortsatt ruller tar med seg landingstiden sin, så den lander når den skulle
+       selv om tavla tegnes om hvert sekund (nedtellingen på fristdagen). */
     const gamle = new Map([...el.querySelectorAll(".flinje")].map(l =>
-      [l.dataset.id, [...l.children].map(c => c.dataset.maal !== undefined ? null : c.textContent)]));
+      [l.dataset.id, [...l.children].map(c => c.dataset.maal !== undefined ? { land: c._land } : c.textContent)]));
     const forsteGang = !el.querySelector(".flinje");
     let html = hode, linjenr = 0;
     rader.forEach(rad => {
+      if (rad.skille !== undefined) { html += `<div class="fskille"><span>${esc(rad.skille)}</span></div>`; return; }
       const linjer = o.linjer.map(l => linjetekst(rad, l)).filter(t => t !== null);
-      html += `<${rad.lenke ? `a href="${trygLenke(rad.lenke)}" target="_blank" rel="noopener"` : "div"} class="frad ${rad.klasse}${rad.ny ? " blink" : ""}" data-key="${esc(rad.key)}">`;
+      html += `<${rad.lenke ? `a href="${trygLenke(rad.lenke)}" target="_blank" rel="noopener"` : "div"} class="frad ${rad.klasse}${rad.ny ? " blink" : ""}" data-key="${esc(rad.key)}"${rad.vindu ? " data-vindu" : ""}>`;
       linjer.forEach((tekst, i) => {
         const id = rad.key + "#" + i, forrige = gamle.get(id);
         html += `<div class="flinje" data-id="${esc(id)}" data-tekst="${esc(tekst)}" data-nr="${linjenr++}">` +
           [...tekst].map((c, k) => {
-            const lik = c === " " || (forrige !== undefined && forrige[k] === c);   // tomme felt vipper ikke
-            const rullet = forrige !== undefined && forrige[k] === null;            // var midt i en vipp
-            return `<span class="fl${c === " " ? " blank" : ""}"${lik ? "" : ` data-maal="${esc(c)}"${rullet ? " data-rull" : ""}`}>${lik ? esc(c) : " "}</span>`;
+            const foer = forrige !== undefined ? forrige[k] : undefined;
+            const lik = c === " " || foer === c;                                    // tomme felt vipper ikke
+            const rullet = foer !== null && typeof foer === "object";               // var midt i en vipp
+            return `<span class="fl${c === " " ? " blank" : ""}"${lik ? "" : ` data-maal="${esc(c)}"${rullet ? ` data-rull="${Math.round(foer.land) || 0}"` : ""}`}>${lik ? esc(c) : " "}</span>`;
           }).join("") + `</div>`;
       });
       html += `</${rad.lenke ? "a" : "div"}>`;
@@ -158,10 +182,11 @@ const display = (() => {
     const start = performance.now();
     celler.forEach(c => {
       const kol = [...c.parentNode.children].indexOf(c), linje = +c.parentNode.dataset.nr;
-      c._land = forsteGang ? 260 + linje * 130 + kol * 26 : 120 + kol * 14;
+      c._land = +c.dataset.rull > 0 ? +c.dataset.rull                       // arvet: lander når den opprinnelig skulle
+        : start + (forsteGang ? 260 + linje * 130 + kol * 26 : 120 + kol * 14);
     });
     tavleTimer = setInterval(() => {
-      const naa = performance.now() - start;
+      const naa = performance.now();
       let igjen = 0;
       for (const c of celler) {
         if (!c.dataset.maal) continue;
@@ -263,6 +288,7 @@ const display = (() => {
       if (s <= 12 * 3600) $("rtekst").textContent = "RADAR: SIST SJEKKET " + to(Math.floor(s / 3600)) + ":" + to(Math.floor(s / 60) % 60) + ":" + to(s % 60) + " SIDEN" + vanligPause();
     }
     document.querySelectorAll("[data-siste]").forEach(el => { el.textContent = "FRIST I DAG · " + nedtelling(el.dataset.siste) + " IGJEN"; });
+    document.querySelectorAll("[data-ned]").forEach(el => { el.textContent = nedtelling(el.dataset.ned); });
     /* siste dag: fristkolonnen på tavla teller ned uten å vippe hele raden */
     if (JOBS.some(j => j.state === "open" && dagerTil(j.deadline) === 0) && !document.hidden) visTavle(false);
   }
@@ -278,6 +304,71 @@ const display = (() => {
     }
     const s = $("scope");
     if (s) { s.classList.add("glimt"); setTimeout(() => s.classList.remove("glimt"), 2200); }
+    const nye = JOBS.filter(j => j.state === "open" && nyISjekken(j));
+    if (nye.length) nyAvgang(nye);
+  }
+
+  /* ================= NY AVGANG: en ny stilling tar skjermen i fem sekunder ================= */
+  let avgangTimer = null;
+  function brekk(tekst, bredde, maks) {       // hele ord per linje, så lange titler ikke kuttes midt i
+    const linjer = [];
+    let linje = "";
+    for (const ord of String(tekst).toUpperCase().replace(/\s+/g, " ").trim().split(" ")) {
+      if (linje && (linje + " " + ord).length > bredde) { linjer.push(linje); linje = ord.slice(0, bredde); }
+      else linje = (linje ? linje + " " + ord : ord).slice(0, bredde);
+    }
+    if (linje) linjer.push(linje);
+    if (linjer.length > maks) linjer[maks - 1] = linjer[maks - 1].slice(0, bredde - 1) + "…";   // kuttet: si fra
+    return linjer.slice(0, maks);
+  }
+  function nyAvgang(nye) {
+    const el = $("avgang");
+    if (!el) return;
+    const j = nye[0], d = dagerTil(j.deadline);
+    const linjer = [["NY AVGANG", "topp"], [kortNavn(maalFor(j.target) || { name: j.target }), "arb"]]
+      .concat(brekk(j.title || j.text || "", 22, 3).map(l => [l, ""]))
+      .concat([[d === null ? "FRIST UKJENT" : "FRIST " + j.deadline.slice(8, 10) + "." + j.deadline.slice(5, 7) + "." + j.deadline.slice(0, 4), "avfrist"]])
+      .concat(nye.length > 1 ? [["+ " + (nye.length - 1) + " TIL", "avfrist"]] : []);
+    let n = 0;
+    el.innerHTML = `<div class="avkort" role="alert">` + linjer.map(([tekst, klasse]) =>
+      `<div class="avlinje ${klasse}" data-tekst="${esc(tekst)}">` + [...tekst].map(c =>
+        `<span class="fl${c === " " ? " blank" : ""}" style="animation-delay:${n++ * 14}ms">${esc(c)}</span>`).join("") + `</div>`).join("")
+      + `<div class="avhint">${tv ? "" : "TRYKK FOR BOARDINGKORT"}</div></div>`;
+    el.dataset.key = j.key;
+    el.hidden = false;
+    clearTimeout(avgangTimer);
+    avgangTimer = setTimeout(lukkAvgang, 5000);
+  }
+  function lukkAvgang() {
+    clearTimeout(avgangTimer);
+    const el = $("avgang");
+    if (el) { el.hidden = true; el.innerHTML = ""; }
+  }
+
+  /* ================= kort for én kilde: trykk på en blip ================= */
+  let valgtBlip = null;
+  function visBlipkort() {
+    const el = $("blipkort");
+    if (!el) return;
+    const t = valgtBlip !== null && !tv ? maalMedId(valgtBlip) : null;
+    if (!t) { el.hidden = true; el.innerHTML = ""; return; }
+    const aapne = JOBS.filter(j => j.state === "open" && j.target === t.name);
+    const trend = trendSvg(t.id, 150, 26);
+    el.hidden = false;
+    el.innerHTML = `<div class="bkhode"><b>${esc(t.label || t.name)}</b><button class="plukk" data-bliplukk aria-label="Lukk">✕</button></div>
+      <div class="bkrad"><span>RADAR</span><b class="${t.ok ? "gronn" : "rod"}">${t.ok ? "OK" : "FEIL x" + esc(t.consecutive_failures || 1)}</b></div>
+      ${!t.ok && t.error ? `<div class="bkfeil">${esc(t.error)}</div>` : ""}
+      <div class="bkrad"><span>ANNONSER PÅ SIDEN NÅ</span><b>${esc(t.listings ?? "–")}</b></div>
+      <div class="bkrad"><span>STILLINGER DU VIL HA${t.ok ? "" : " · SIST KJENT"}</span><b class="${aapne.length ? "gul" : ""}">${aapne.length}</b></div>
+      ${aapne.map(j => `<a class="bkjobb" href="#jobb=${encodeURIComponent(j.key)}" data-kort="${esc(j.key)}">${esc(j.title || j.text)}</a>`).join("")}
+      ${trend ? `<div class="trend">${trend.html}<span${trend.fall ? ' class="rod"' : ""}>${esc(trend.tekst)}</span></div>` : ""}
+      <div class="bact"><button class="btn smal" data-tilmaal="${esc(t.id)}">Gå til arbeidsgiveren</button>
+        <a class="btn smal" href="${trygLenke(t.url)}" target="_blank" rel="noopener">Karrieresiden ↗</a></div>`;
+  }
+  function velgBlip(id) {
+    valgtBlip = valgtBlip === id ? null : id;
+    visBlipkort();
+    document.querySelectorAll(".blip").forEach(b => b.classList.toggle("valgt", b.dataset.blip === valgtBlip));
   }
 
   /* ================= TV-modus ================= */
@@ -296,6 +387,7 @@ const display = (() => {
     if (tv) return;
     tv = true;
     document.body.classList.add("tv");
+    valgtBlip = null;
     if (fullskjerm) { try { const r = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
     holdVaaken();
     settVisning(0);
@@ -320,14 +412,33 @@ const display = (() => {
     render();
   }
   document.addEventListener("keydown", e => { if (e.key === "Escape") tvAv(); });
+  const rullTil = el => { if (el) el.scrollIntoView({ behavior: rolig ? "auto" : "smooth", block: "center" }); };
   document.addEventListener("click", e => {
-    if (e.target.closest("#tvknapp")) { e.preventDefault(); tvPaa(true); }
-    else if (tv && !e.target.closest("a")) tvAv();
-    else {
-      const b = e.target.closest("[data-blip]");
-      const kort = b && document.querySelector(`#board [data-maal="${CSS.escape(b.dataset.blip)}"]`);
-      if (kort && !tv) kort.scrollIntoView({ behavior: rolig ? "auto" : "smooth", block: "center" });
+    const av = e.target.closest("#avgang");
+    if (av) {                                   // NY AVGANG: et trykk lukker, og åpner boardingkortet
+      const key = av.dataset.key;
+      lukkAvgang();
+      if (!tv && key && window.aapneKort) aapneKort(key);
+      return;
     }
+    if (e.target.closest("#tvknapp")) { e.preventDefault(); tvPaa(true); return; }
+    if (tv) { if (!e.target.closest("a")) tvAv(); return; }
+    if (e.target.closest("[data-bliplukk]")) { velgBlip(valgtBlip); return; }
+    const til = e.target.closest("[data-tilmaal]");
+    if (til) { rullTil(document.querySelector(`#board [data-maal="${CSS.escape(til.dataset.tilmaal)}"]`)); return; }
+    const rad = e.target.closest("#avganger .frad");
+    if (rad) {
+      if (rad.dataset.vindu !== undefined) { rullTil($("vinduer")); return; }
+      /* vanlig trykk åpner boardingkortet; ctrl/cmd-trykk åpner fortsatt annonsen i ny fane */
+      if (!e.metaKey && !e.ctrlKey && !e.shiftKey && window.aapneKort && aapneKort(rad.dataset.key)) e.preventDefault();
+      return;
+    }
+    const b = e.target.closest("[data-blip]");
+    if (b) velgBlip(b.dataset.blip);
+  });
+  document.addEventListener("keydown", e => {   // blipper er knapper: Enter og mellomrom virker
+    const b = (e.key === "Enter" || e.key === " ") && !tv && e.target.closest && e.target.closest("[data-blip]");
+    if (b) { e.preventDefault(); velgBlip(b.dataset.blip); }
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) holdVaaken(); });
   let bredde = window.innerWidth;
@@ -339,6 +450,8 @@ const display = (() => {
     const endret = window.radarEndret === true;
     window.radarEndret = false;
     visScope();
+    document.querySelectorAll(".blip").forEach(b => b.classList.toggle("valgt", b.dataset.blip === valgtBlip));
+    visBlipkort();
     visTavle(forsteTavle || endret ? true : false);
     forsteTavle = false;
     visLogg(endret && STATUS ? STATUS.generated : null);

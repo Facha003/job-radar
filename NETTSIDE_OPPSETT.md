@@ -87,6 +87,12 @@ Mottaker er secret `ALERT_EMAIL` i GitHub (feltet `email` i config.json står to
 * LOGG er det radaren faktisk har gjort: hver sjekk, nye og lukkede utlysninger, kilder som feiler og kommer tilbake, påminnelser. De ti siste ruller også nederst på skjermen.
 * Under hver arbeidsgiver på TAVLE står en trendlinje over antall annonser per sjekk. Blir den rød, har tallet falt til null eller under halvparten av det vanlige, som oftest betyr at leseren er ødelagt.
 * TV-MODUS: trykk TV-MODUS i menyen, eller legg til `?tv` bak adressen på en TV, et nettbrett eller en ekstra skjerm. Da vises bare radarskjermen og tavla i stort format, høyre side bytter mellom AVGANGER, LOGG og TRENDER hvert 20. sekund, skjermen holdes våken, og ingenting kan redigeres. Esc eller et trykk går tilbake.
+* BOARDINGKORT (versjon 6): trykk på en stilling, på et jobbkort, en rad på avgangstavla eller under SØKNADER. Kortet viser frist med nedtelling, stillingsprosent, ansettelsesform og kravene radaren fant i selve annonsen, pluss din status, notat og en stor SØK-knapp. Esc, tilbakeknappen eller et trykk utenfor lukker det. Radaren leser annonsen selv, så les alltid annonsen før du søker.
+* Er færre enn seks stillinger ute, fyller avgangstavla resten med VENTES-rader: når arbeidsgiverne pleier å lyse ut. Det er dine egne anslag, og de endres i `windows` i `config.json` (`opens` er datoen, `null` betyr løpende). Samme liste vises under VINDUER.
+* Trykk på en prikk på radarskjermen for å se tallene for den kilden: status, antall annonser, stillinger du vil ha, siste feil og trend.
+* Kommer det en ny stilling mens siden står åpen, tar NY AVGANG skjermen i fem sekunder. Et trykk åpner boardingkortet.
+* TEMA i menyen bytter mellom AUTO (følger telefonens lys/mørk), MØRK, LYS og SKILT. Valget huskes i nettleseren.
+* På bred skjerm (PC) ligger alt side om side: radar og tall til venstre, tavle og stillinger i midten, logg til høyre.
 * LEDIG NÅ viser hver stilling du vil ha med nedtelling til fristen. Sett status (SKAL SØKE, SØKT, INTERVJU ...) så havner den under SØKNADER og blir stående der også etter at utlysningen er lukket.
 * HISTORIKK fylles etter hvert som radaren ser utlysninger komme og gå. Over tid viser den når hver arbeidsgiver pleier å lyse ut.
 * RADAR viser hvor ofte GitHub faktisk har kjørt sjekken det siste døgnet, og den lengste pausen siste uke.

@@ -1547,6 +1547,23 @@ def seed_events(alerts, jobs):
     return sorted(seeded, key=lambda e: e["t"], reverse=True)
 
 
+def hiring_windows(cfg):
+    """The "windows" list from config.json (when each employer usually hires:
+    your own estimates), cleaned for the dashboard. opens is 'YYYY-MM-DD', or
+    None for an employer that hires all year."""
+    out = []
+    for w in cfg.get("windows") or []:
+        if not isinstance(w, dict) or not squash(str(w.get("label") or "")):
+            continue
+        try:
+            opens = date.fromisoformat(str(w.get("opens"))).isoformat()
+        except ValueError:
+            opens = None
+        out.append({"label": squash(str(w["label"])), "note": squash(str(w.get("note") or "")),
+                    "target": str(w.get("target") or ""), "opens": opens})
+    return out
+
+
 def history_entry(run_report, stamp):
     """Listing count per source for this run: the dashboard's trend lines."""
     return {
@@ -1811,6 +1828,7 @@ def run_radar(cfg, force_heartbeat=False):
         "recent_alerts": alerts,
         "runs": (prev_status.get("runs", []) + [stamp])[-MAX_RUN_LOG:],
         "calendar": True,   # docs/frister.ics exists; the dashboard shows a subscribe link
+        "windows": hiring_windows(cfg),
         "events": events[:MAX_EVENTS],                                                              # newest first
         "history": (prev_status.get("history", []) + [history_entry(run_report, stamp)])[-MAX_RUN_LOG:],  # oldest first
     })
