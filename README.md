@@ -20,6 +20,7 @@ GitHub Actions (cron every 10 min, paced to one real check per ~30 min)
        │    a Teamtailor RSS feed (Aviator), NAV's official job vacancy feed (everyone else)
        ├─ filters each listing: location → exclusions → role keywords
        │    └─ vague titles: opens the ad and checks the role in the body
+       ├─ opens the ad of each wanted job: deadline, percent, contract type, requirements
        ├─ new matches → one GitHub issue per job → email notification
        ├─ deadline reminders 3 days and 1 day before, as a comment on the job's issue
        ├─ docs/frister.ics: a calendar feed of the deadlines
@@ -67,6 +68,10 @@ GitHub Pages
 
 **Nothing on screen is faked.** The radar only runs a few times a day, so the display never pretends to scan live. The sweep passes over each source's real last status, the board shows real postings, the log is what the radar actually did (kept as `events` in `status.json`), the trend lines are real listing counts per run (`history`), and the clocks count real time since the last check.
 
+**Read the ad, not just the list.** Job lists often leave the deadline out: Norwegian's feed carries an unfilled template (`[[applDeadline]]`) where the date should be, so a posting with five days left showed "deadline unknown". The radar now opens the ad of every wanted posting (at most six per run, a posting with nothing found once a day) and reads the deadline, the size of the position, the contract type and the requirements. A date only counts as the deadline when it stands right after a deadline label, so a start date is never mistaken for one, and a deadline the list itself states always wins. Nothing personal from the ad is stored: the repository is public.
+
+**One empty answer closes nothing.** A feed can answer "200 OK" with no jobs in it for a moment (seen on the SuccessFactors feed). A posting is only marked closed after it is missing from two checks in a row, and a source that had listings and suddenly shows none gets a line in the log the same hour.
+
 **Closing the issue is the off switch.** Each job gets its own GitHub issue. Deadline reminders go there as comments, and stop when the issue is closed. The radar never needs to know whether I applied: that stays in my browser, and a closed issue in a public repo says nothing about why it was closed.
 
 **One broken site never stops the others.** Any error in one target, including a bug in its parser, is counted as that target's failure and shown on the dashboard with the reason. The rest of the run carries on.
@@ -102,6 +107,6 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-The suite runs without network access. It covers the filters for each site (wanted roles alert, ramp, cargo, cleaning and other airports stay quiet), all three source types, alert delivery and retry, failure warnings, the weekly mail and the command line. GitHub runs it on every change to the code or config.
+The suite runs without network access. It covers the filters for each site (wanted roles alert, ramp, cargo, cleaning and other airports stay quiet), all three source types, alert delivery and retry, failure warnings, reading facts out of job ads, the weekly mail and the command line. GitHub runs it on every change to the code or config.
 
 Targets, keywords and exclusions live in `config.json`. Setup notes for GitHub Pages (Norwegian) are in `NETTSIDE_OPPSETT.md`.

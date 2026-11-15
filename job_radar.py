@@ -73,6 +73,8 @@ MAX_ALERT_HISTORY = 25    # alerts kept in seen.json and shown on the dashboard
 DIGEST_THRESHOLD = 5      # more hits than this in one run -> one summary ping, not a storm
 REMIND_DAYS = (3, 1)       # remind this many days before a deadline, once each
 MAX_JOB_HISTORY = 300     # postings remembered in docs/jobs.json (oldest closed ones go first)
+MAX_DETAIL_READS = 6      # job ads opened per run to read deadline, percent and requirements
+CLOSE_AFTER_MISSES = 2    # checks in a row a posting must be gone before it counts as closed
 MAX_EVENTS = 150          # lines kept in the dashboard's log (status.json "events")
 MAX_RUN_LOG = 200         # run times kept in status.json, so the dashboard can show real pace
 DEFAULT_DASHBOARD = "https://facha003.github.io/job-radar/"
@@ -471,6 +473,8 @@ def find_deadline(row_text):
 MONTHS = {
     "januar": 1, "februar": 2, "mars": 3, "april": 4, "mai": 5, "juni": 6, "juli": 7,
     "august": 8, "september": 9, "oktober": 10, "november": 11, "desember": 12,
+    "january": 1, "february": 2, "march": 3, "may": 5, "june": 6, "july": 7,
+    "october": 10, "december": 12,
 }
 DATE_ISO_RE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})")
 DATE_DOTS_RE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b")
@@ -691,6 +695,167 @@ SF_DESC_RE = re.compile(r"<Job-Description>.*?</Job-Description>", re.S)
 SF_CDATA_RE = re.compile(r"<!\[CDATA\[(.*)\]\]>", re.S)
 
 
+
+# --------------------------------------------------------------------------
+# reading one job ad: deadline, percent, contract, requirements
+# --------------------------------------------------------------------------
+
+def fetch_ad_text(link):
+    """Readable text of one job ad (lowercased, scripts and styles removed),
+    or None when it cannot be read."""
+    try:
+        resp = fetch("GET", link, headers=HEADERS, timeout=30)
+    except requests.RequestException:
+        return None
+    soup = BeautifulSoup(resp.text, "html.parser")
+    for junk in soup(["script", "style", "noscript", "template"]):
+        junk.decompose()
+    text = squash(soup.get_text(" ", strip=True)).lower()
+    return text if len(text) > 300 else None
+
+
+# a date only counts as the deadline when one of these labels stands right before it
+FACT_DEADLINE_RE = re.compile(
+    r"(?:application deadline|deadline for applications?|søknadsfrist|ansøgningsfrist|frist for (?:å søke|søknad)"
+    r"|apply by|apply before|closing date|\bfrist)\s*[:\-–]?\s*(?=(.{0,45}))")
+# ... and the date has to be the very next thing (a weekday in front is fine), so
+# "Søknadsfrist: snarest. Oppstart 01.02.2027" does not turn the start date into a deadline
+FACT_DATE_NEXT_RE = re.compile(
+    r"(?:(?:man|tirs|ons|tors|fre|lør|søn)dag|(?:mon|tues|wednes|thurs|fri|satur|sun)day)?,?\s*(?:den\s+)?"
+    r"(\d{4}-\d{2}-\d{2}|\d{1,2}\.\d{1,2}\.\d{4}|\d{1,2}\.?\s+(?:" + "|".join(MONTHS) + r")\s+\d{4})")
+FACT_PERCENT_RANGE_RE = re.compile(
+    r"\b(\d{2,3})\s?(?:-|–|til|to)\s?(\d{2,3})\s?%\s*(?:stilling|fast|permanent|contract|position|vikar|deltid|part)")
+FACT_PERCENT_RES = [
+    re.compile(r"\b(\d{2,3})\s?%\s*(?:stilling|fast|permanent|contract|position|vikar|deltid|part|midlertidig|temporary|fte)"),
+    re.compile(r"(?:stillingsprosent|stillingsstørrelse|stillingsbrøk|omfang|percentage of full[- ]time)\s*:?\s*(\d{2,3})\s?%?"),
+    re.compile(r"(?:stilling(?:en|er)? (?:på|i)|contracts? of|position of)\s*(\d{2,3})\s?%"),
+]
+FACT_FULLTIME_RE = re.compile(r"\b(?:heltid|fulltid|full[- ]time)\b")
+FACT_PARTTIME_RE = re.compile(r"\b(?:deltid|part[- ]time)\b")
+FACT_CONTRACT_LABEL_RE = re.compile(
+    r"(?:type of contract|contract type|employment type|ansettelsesform|stillingstype|ansettelsestype)\s*:?\s*([^.:]{0,40})")
+FACT_CONTRACTS = [   # (what the dashboard shows, words that mean it)
+    ("TILKALLING", re.compile(r"\b(?:tilkalling\w*|ekstrahjelp\w*|on[- ]call)\b")),
+    ("SESONG", re.compile(r"\b(?:sesong\w*|sommerjobb\w*|sommervikar\w*|seasonal|summer (?:job|season|temp)\w*)\b")),
+    ("VIKARIAT", re.compile(r"\b(?:vikariat\w*|vikar|midlertidig\w*|temporary|engasjement\w*|fixed[- ]term)\b")),
+    ("FAST", re.compile(r"\b(?:fast(?:e)? (?:stilling\w*|ansettelse\w*|ansatt\w*)|permanent\w*)\b")),
+]
+_LANG_CUE = r"(?:behersk\w*|snakk\w*|flytende|språk\w*|muntlig|skriftlig|fluent|proficien\w*|speak\w*|written|verbal|oral|language\w*|skills)"
+FACT_TAGS = [
+    ("NORSK", re.compile(rf"{_LANG_CUE}[^.]{{0,40}}\b(?:norsk|skandinavisk|scandinavian|norwegian language)"
+                         r"|\b(?:norsk|skandinavisk|scandinavian|scaninavian)\w*[^.]{0,30}(?:muntlig|skriftlig|språk|language|speaking|speaker)"
+                         r"|norwegian (?:language|speaking|speaker)")),
+    ("ENGELSK", re.compile(rf"{_LANG_CUE}[^.]{{0,40}}\b(?:engelsk|english)"
+                           r"|\b(?:engelsk|english)\w*[^.]{0,30}(?:muntlig|skriftlig|språk|language|speaking|skills)")),
+    ("FØRERKORT", re.compile(r"førerkort|driver['’]?s licen[cs]e|driving licen[cs]e")),
+    ("BAKGRUNNSSJEKK", re.compile(r"bakgrunnssjekk|vandel|politiattest|background (?:check|documentation)|security clearance|criminal record")),
+    ("SKIFT", re.compile(r"\b(?:skift\w*|turnus\w*|shifts?|shift work|rotating shift\w*)\b")),
+    ("18 ÅR", re.compile(r"\b(?:fylt 18|18 år|18 years|minimum 18|at least 18)\b")),
+]
+
+
+def extract_facts(text):
+    """What one job ad says, as short facts for the dashboard.
+
+    deadline  'YYYY-MM-DD', only from a date that follows a deadline label
+    percent   "75 %", "50–100 %", "100 %" (full time) or "DELTID"
+    contract  FAST / VIKARIAT / SESONG / TILKALLING
+    tags      requirements the ad mentions (language, licence, background check …)
+
+    Nothing personal is kept: no names, phone numbers or addresses."""
+    text = squash(text).lower()
+    facts = {"deadline": None, "percent": "", "contract": "", "tags": []}
+    for m in FACT_DEADLINE_RE.finditer(text):
+        date_next = FACT_DATE_NEXT_RE.match(m.group(1))
+        found = parse_deadline(date_next.group(1)) if date_next else None
+        if found:
+            facts["deadline"] = found
+            break
+
+    def sane(*numbers):
+        return all(10 <= int(n) <= 100 for n in numbers)
+
+    m = FACT_PERCENT_RANGE_RE.search(text)
+    if m and sane(m.group(1), m.group(2)) and int(m.group(1)) < int(m.group(2)):
+        facts["percent"] = f"{int(m.group(1))}–{int(m.group(2))} %"
+    else:
+        for rx in FACT_PERCENT_RES:
+            m = rx.search(text)
+            if m and sane(m.group(1)):
+                facts["percent"] = f"{int(m.group(1))} %"
+                break
+        else:
+            full, part = FACT_FULLTIME_RE.search(text), FACT_PARTTIME_RE.search(text)
+            if full and not part:
+                facts["percent"] = "100 %"
+            elif part and not full:
+                facts["percent"] = "DELTID"
+
+    labelled = FACT_CONTRACT_LABEL_RE.search(text)
+    if labelled:
+        facts["contract"] = next((name for name, rx in FACT_CONTRACTS if rx.search(labelled.group(1))), "")
+    if not facts["contract"]:   # no label: the kind that is named first in the ad
+        first = [(rx.search(text).start(), name) for name, rx in FACT_CONTRACTS if rx.search(text)]
+        facts["contract"] = min(first)[1] if first else ""
+    facts["tags"] = [name for name, rx in FACT_TAGS if rx.search(text)]
+    return facts
+
+
+def facts_line(deadline, details):
+    """'frist 20.11.2026 · 75 % · fast' for an alert; '' when nothing is known."""
+    parts = []
+    if deadline:
+        parts.append("frist " + date.fromisoformat(deadline).strftime("%d.%m.%Y"))
+    parts += [v for v in ((details or {}).get("percent"), ((details or {}).get("contract") or "").lower()) if v]
+    return " · ".join(parts)
+
+
+def read_details(result, prev_jobs, today, budget, list_url=""):
+    """Open the ad of each wanted posting that has not been read yet, and put
+    what it says on the open item (and on the alert text of a new hit).
+
+    A posting is read when it is new, has no details, or still has no
+    deadline; one with nothing found is tried again at most once a day.
+    A posting whose link is just the list page (list_url) has no ad of its
+    own to read: the page would hand it some other job's deadline.
+    Returns how many ads were opened. A read that fails changes nothing."""
+    def page(link):
+        return (link or "").split("#")[0].rstrip("/")
+
+    known = {j.get("key"): j for j in prev_jobs if isinstance(j, dict)}
+    stamp = today.isoformat()
+    used = 0
+    for item in result.open:
+        old = known.get(item.get("key")) or {}
+        has_deadline = item.get("deadline") or old.get("deadline")
+        if item.get("details"):
+            continue   # the source handed the ad over itself (NAV)
+        if old.get("details") and has_deadline:
+            continue
+        if old.get("details_tried") == stamp:
+            item["details_tried"] = stamp
+            continue
+        link = item.get("detail_link") or item.get("link") or ""
+        if not page(link) or page(link) == page(list_url):
+            continue
+        if used >= budget:
+            break
+        used += 1
+        item["details_tried"] = stamp
+        text = fetch_ad_text(link)
+        if not text:
+            continue
+        facts = extract_facts(text)
+        item["details"] = {"percent": facts["percent"], "contract": facts["contract"], "tags": facts["tags"], "read": stamp}
+        found_here = None
+        if not has_deadline and facts["deadline"]:
+            found_here = item["deadline"] = facts["deadline"]
+        extra = facts_line(found_here, item["details"])
+        if extra:
+            result.hits = [h._replace(text=f"{h.text} · {extra}") if h.key == item.get("key") else h for h in result.hits]
+    return used
+
+
 def sf_field(block, tag):
     m = re.search(rf"<{tag}>(.*?)</{tag}>", block, re.S)
     if not m:
@@ -732,6 +897,8 @@ def check_successfactors(target, seen_keys, log: Log = _quiet):
     Fields in config.json:
       feed       feed address (…career?company=X&career_ns=job_listing_summary&resultType=XML)
       job_link   link to one job, "{id}" is replaced by the requisition id
+      detail_link  where the radar itself reads one ad (deadline, percent …),
+                 when job_link is behind a bot wall
       keywords / exclude_keywords / check_detail / detail_trigger
                  as for HTML targets, matched on title + field of work; the ad
                  body comes with the feed, so check_detail costs no extra request
@@ -788,7 +955,10 @@ def check_successfactors(target, seen_keys, log: Log = _quiet):
             continue
         run_keys.add(key)
         link = target["job_link"].replace("{id}", job["id"]) if job["id"] and target.get("job_link") else target["url"]
-        open_matches.append(open_item(key, label, link))  # the feed states no deadline
+        item = open_item(key, label, link)  # the feed states no deadline; the ad itself does
+        if job["id"] and target.get("detail_link"):
+            item["detail_link"] = target["detail_link"].replace("{id}", job["id"])
+        open_matches.append(item)
         if key not in seen_keys:
             hits.append(Hit(label, link, key))
     return CheckResult(hits, open_matches, len(jobs))
@@ -888,6 +1058,14 @@ def nav_token():
     if token.count(".") != 2:
         raise SourceError("could not read NAV's public feed token")
     return token
+
+
+def nav_facts(content):
+    """Percent, contract and requirements from a NAV ad (its deadline has a field of its own)."""
+    words = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", v)) for v in content.values() if isinstance(v, str))
+    facts = extract_facts(words)
+    return {"percent": facts["percent"], "contract": facts["contract"], "tags": facts["tags"],
+            "read": today_oslo().isoformat()}
 
 
 def check_nav(target, seen_keys, log: Log = _quiet, memory=None):
@@ -1022,6 +1200,7 @@ def check_nav(target, seen_keys, log: Log = _quiet, memory=None):
             "expires": content.get("expires"),
             "link": content.get("link") or ad["link"],
             "detailed": True,
+            "facts": nav_facts(content),
         })
 
     now = now_utc()
@@ -1040,7 +1219,12 @@ def check_nav(target, seen_keys, log: Log = _quiet, memory=None):
         label = f"{title} · frist {ad['due']}" if ad.get("due") else title
         key = f"{name}|nav|{uuid}"
         log(f"  MATCH {label}")
-        open_matches.append(open_item(key, title, ad["link"], label, ad.get("deadline")))
+        item = open_item(key, title, ad["link"], label, ad.get("deadline"))
+        if ad.get("facts"):
+            item["details"] = ad["facts"]
+            extra = facts_line(None, ad["facts"])
+            label = f"{label} · {extra}" if extra else label
+        open_matches.append(item)
         if key not in seen_keys:
             hits.append(Hit(label, ad["link"], key))
     if memory is not None:   # only now, so a failed read never leaves a half-updated bookmark
@@ -1082,8 +1266,10 @@ def update_jobs(prev_jobs, checked, now, first_seen_hint=None, issues=None):
                posting alerted before jobs.json existed keeps its real date
 
     A posting listed now is open. One that was open and is gone from a source
-    that answered is closed. A source that failed says nothing about its
-    postings, so they are left exactly as they were."""
+    that answered CLOSE_AFTER_MISSES checks in a row is closed: a source can
+    answer "OK" with an empty list for a moment, and that must not close a
+    live job. A source that failed says nothing about its postings, so they
+    are left exactly as they were."""
     hint = first_seen_hint or {}
     issues = issues or {}
     jobs = {j["key"]: dict(j) for j in prev_jobs if isinstance(j, dict) and j.get("key")}
@@ -1116,12 +1302,19 @@ def update_jobs(prev_jobs, checked, now, first_seen_hint=None, issues=None):
                 "state": "open",
                 "closed_at": None,
             })
+            job.pop("missed", None)
+            for field in ("details", "details_tried"):
+                if item.get(field):
+                    job[field] = item[field]
             if key in issues:
                 job["issue"] = issues[key]   # the GitHub issue that alerted this job
         for job in jobs.values():
             if job.get("target") == name and job.get("state") == "open" and job["key"] not in live:
-                job["state"] = "closed"
-                job["closed_at"] = now
+                job["missed"] = job.get("missed", 0) + 1
+                if job["missed"] >= CLOSE_AFTER_MISSES:
+                    job["state"] = "closed"
+                    job["closed_at"] = now
+                    job.pop("missed", None)
 
     ordered = sorted(jobs.values(), key=lambda j: (j.get("first_seen", ""), j["key"]))
     extra = len(ordered) - MAX_JOB_HISTORY
@@ -1190,6 +1383,42 @@ def send_reminders(cfg, jobs, today, skip_keys=()):
             job["reminded"] = sorted(set(job.get("reminded", [])) | {level})
             sent.append((job, left))
     return sent
+
+
+def late_deadlines(prev_jobs, jobs, skip_keys=()):
+    """Open jobs the radar already knew without a deadline, that have one now."""
+    had_none = {j.get("key") for j in prev_jobs if isinstance(j, dict) and not j.get("deadline")}
+    return [j for j in jobs if j.get("state") == "open" and j.get("deadline")
+            and j["key"] in had_none and j["key"] not in skip_keys]
+
+
+def send_deadline_found(cfg, jobs, today):
+    """Tell you about a deadline the radar found after the job was alerted.
+    Skipped when the deadline is so close that a reminder goes out anyway, or
+    already passed. Returns the jobs it told you about."""
+    told = []
+    for job in jobs:
+        left = days_left(job, today)
+        if left is None or left <= max(REMIND_DAYS):
+            continue
+        number = job.get("issue")
+        if number and issue_is_closed(number):
+            continue
+        when = date.fromisoformat(job["deadline"]).strftime("%d.%m.%Y")
+        name = job.get("title") or job.get("text", "")
+        title = f"📅 Frist funnet ({when}): {name}"
+        delivered = send_direct(cfg, title, f"{job.get('target', '')}. Radaren leste annonsen: søknadsfristen er {when}.",
+                                job.get("link", ""), push=PUSH_REMINDER)
+        if email_mode(cfg) == "issue":
+            line = f"**Frist funnet: {when}** ({reminder_text(left).lower()}): {md_link(name, job.get('link', ''))}"
+            if number:
+                ok = comment_issue(number, f"📅 {line}\n\nRadaren leste selve annonsen. Du får påminnelse 3 dager og 1 dag før.")
+            else:
+                ok = bool(create_issue(title, f"📅 {line} — {job.get('target', '')}", close=True))
+            delivered = delivered or ok
+        if delivered:
+            told.append(job)
+    return told
 
 
 def ics_escape(text):
@@ -1271,7 +1500,7 @@ def event(t, kind, target, text, link=""):
     return {"t": t, "type": kind, "target": target, "text": text, "link": link}
 
 
-def build_events(jobs, run_report, fail_before, new_hits, reminded, stamp):
+def build_events(jobs, run_report, fail_before, new_hits, reminded, stamp, found=(), prev_listings=None):
     """What happened in this run, as log lines for the dashboard.
 
     jobs         the job list after update_jobs()
@@ -1279,9 +1508,13 @@ def build_events(jobs, run_report, fail_before, new_hits, reminded, stamp):
     fail_before  {target name: failures in a row} as it was before this run
     new_hits     [(target name, Hit)] that were delivered this run
     reminded     [(job, days left)] from send_reminders()
+    found        jobs whose deadline the radar found in this run (late_deadlines)
+    prev_listings  {target name: listings at the last check}
 
-    Types: new, closed, fail (only the first failure in a row), back,
-    reminder, and one closing "check" line that sums the run up."""
+    Types: new, closed, fail (only the first failure in a row), back, empty
+    (a source that had listings answers with none), deadline, reminder, and
+    one closing "check" line that sums the run up."""
+    prev_listings = prev_listings or {}
     out = [event(stamp, "new", name, hit.text, hit.link) for name, hit in new_hits]
     out += [event(stamp, "closed", j.get("target", ""), j.get("title") or j.get("text", ""), j.get("link", ""))
             for j in jobs if j.get("state") == "closed" and j.get("closed_at") == stamp]
@@ -1291,6 +1524,11 @@ def build_events(jobs, run_report, fail_before, new_hits, reminded, stamp):
             out.append(event(stamp, "fail", r["name"], r.get("error") or "svarer ikke", r.get("url", "")))
         elif r["ok"] and before > 0:
             out.append(event(stamp, "back", r["name"], f"virker igjen etter {before} feilet sjekk" + ("" if before == 1 else "er"), r.get("url", "")))
+        if r["ok"] and r.get("listings") == 0 and (prev_listings.get(r["name"]) or 0) > 0:
+            out.append(event(stamp, "empty", r["name"], f"0 stillinger på siden, var {prev_listings[r['name']]}. Kan være en feil hos kilden", r.get("url", "")))
+    for j in found:
+        when = date.fromisoformat(j["deadline"]).strftime("%d.%m.%Y")
+        out.append(event(stamp, "deadline", j.get("target", ""), f"Frist funnet {when}: {j.get('title') or j.get('text', '')}", j.get("link", "")))
     out += [event(stamp, "reminder", j.get("target", ""), f"{reminder_text(left)}: {j.get('title') or j.get('text', '')}", j.get("link", ""))
             for j, left in reminded]
     failing = sum(1 for r in run_report if not r["ok"])
@@ -1429,6 +1667,9 @@ def run_radar(cfg, force_heartbeat=False):
     fail_before = dict(fail_counts)
     prev_status = load_json(STATUS_PATH, {})
     prev_open = {t["name"]: t.get("open", []) for t in prev_status.get("targets", [])}
+    prev_listings = {t["name"]: t.get("listings") for t in prev_status.get("targets", []) if t.get("ok")}
+    prev_jobs = load_json(JOBS_PATH, {}).get("jobs", [])
+    reads_left = MAX_DETAIL_READS
 
     channels_exist = any_channel(cfg)
     if not channels_exist:
@@ -1467,6 +1708,10 @@ def run_radar(cfg, force_heartbeat=False):
                 f"Radaren leser siden igjen etter {before} feilede sjekker på rad.",
                 target.get("url", ""),
             )
+        try:   # read the ads themselves; never let that break a source that answered
+            reads_left -= read_details(result, prev_jobs, today_oslo(), reads_left, target.get("url", ""))
+        except Exception as exc:  # noqa: BLE001
+            print(f"[{name}] could not read job ads: {short_error(exc)}")
         direct_ok = send_hits_direct(cfg, name, result.hits, target["url"]) if result.hits else False
         pending.extend((name, hit, direct_ok) for hit in result.hits)
         checked.append((target, result, ""))
@@ -1542,13 +1787,23 @@ def run_radar(cfg, force_heartbeat=False):
         if a.get("time"):
             hint[a.get("link")] = a["time"]
             hint[f"{a.get('target')}|{a.get('text')}"] = a["time"]
-    prev_jobs = load_json(JOBS_PATH, {}).get("jobs", [])
     jobs = update_jobs(prev_jobs, checked, stamp, first_seen_hint=hint, issues=issue_of)
-    reminded = send_reminders(cfg, jobs, today_oslo(), skip_keys={hit.key for _, hit, _ in pending})
+    # a posting missing once is still open (see update_jobs): keep it on the dashboard's lists too
+    for entry in run_report:
+        if entry["ok"]:
+            listed = {o.get("key") for o in entry["open"]}
+            entry["open"] = entry["open"] + [
+                open_item(j["key"], j.get("title") or j.get("text", ""), j.get("link", ""), j.get("text"), j.get("deadline"))
+                for j in jobs if j.get("target") == entry["name"] and j.get("state") == "open" and j["key"] not in listed]
+    new_keys = {hit.key for _, hit, _ in pending}
+    found = late_deadlines(prev_jobs, jobs, skip_keys=new_keys)
+    send_deadline_found(cfg, found, today_oslo())
+    reminded = send_reminders(cfg, jobs, today_oslo(), skip_keys=new_keys)
     save_json(JOBS_PATH, {"generated": stamp, "jobs": jobs})
     save_text(CALENDAR_PATH, build_calendar(jobs, {t.get("name"): t.get("label") or t.get("name") for t in cfg.get("targets", [])}))
     old_events = prev_status["events"] if isinstance(prev_status.get("events"), list) else seed_events(alerts[len(delivered_hits):], prev_jobs)
-    events = build_events(jobs, run_report, fail_before, delivered_hits, reminded, stamp) + old_events
+    events = build_events(jobs, run_report, fail_before, delivered_hits, reminded, stamp,
+                          found=found, prev_listings=prev_listings) + old_events
     save_json(STATUS_PATH, {
         "generated": stamp,
         "channels": {"email": bool(email_mode(cfg)), "push": bool(get_topic(cfg))},

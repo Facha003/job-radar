@@ -175,7 +175,8 @@ const display = (() => {
   /* ================= logg og løpende tekst ================= */
   const TYPE = {
     new: ["●", "NY STILLING", "gul"], closed: ["○", "LUKKET", "graa"], fail: ["✕", "FEIL", "rod"],
-    back: ["✓", "TILBAKE", "gronn"], reminder: ["◷", "FRIST", "gul"], check: ["·", "SJEKK", "graa"]
+    back: ["✓", "TILBAKE", "gronn"], reminder: ["◷", "FRIST", "gul"], check: ["·", "SJEKK", "graa"],
+    deadline: ["◷", "FRIST FUNNET", "gul"], empty: ["!", "TOM SIDE", "rod"]
   };
   const hendelser = () => (STATUS && Array.isArray(STATUS.events)) ? STATUS.events : null;
   function hendelseTekst(e) {

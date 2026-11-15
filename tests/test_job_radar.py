@@ -67,6 +67,7 @@ def clean_env(monkeypatch, tmp_path):
     monkeypatch.setattr(jr, "JOBS_PATH", tmp_path / "docs" / "jobs.json")
     monkeypatch.setattr(jr, "CALENDAR_PATH", tmp_path / "docs" / "frister.ics")
     monkeypatch.setattr(jr.time, "sleep", lambda s: None)
+    monkeypatch.setattr(jr, "fetch_ad_text", lambda link: None)   # job ads are unreadable unless a test serves them
 
     def no_network(*a, **k):
         raise AssertionError("test tried to use the real network")
@@ -846,12 +847,14 @@ def test_open_items_carry_key_title_and_deadline(monkeypatch):
     assert jr.check(nor(), set()).open == [{
         "key": "Norwegian (Red Handling)|successfactors|3133", "text": "Customer Service Agent, OSL",
         "title": "Customer Service Agent, OSL", "link": "https://careers.norwegian.com/job-invite/3133/", "deadline": None,
+        "detail_link": "https://career2.successfactors.eu/career?company=norwegiana&career_ns=job_listing&career_job_req_id=3133",
     }]
 
 
 # ------------------------------------------------------------- job memory
 
 T1, T2, T3 = "2026-11-10T08:00:00+00:00", "2026-11-11T08:00:00+00:00", "2026-11-12T08:00:00+00:00"
+T4 = "2026-11-13T08:00:00+00:00"
 ALPHA, BETA = {"name": "Alpha"}, {"name": "Beta"}
 
 
@@ -868,21 +871,47 @@ def test_jobs_open_close_and_reopen():
     assert states(jobs) == {"Alpha|1": "open", "Alpha|2": "open"}
     assert jobs[0]["first_seen"] == T1 and jobs[0]["closed_at"] is None
 
-    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 2), "")], T2)      # job 1 is gone
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 2), "")], T2)      # job 1 is gone once: not closed yet
+    by = {j["key"]: j for j in jobs}
+    assert states(jobs) == {"Alpha|1": "open", "Alpha|2": "open"}
+    assert by["Alpha|1"]["missed"] == 1 and by["Alpha|1"]["last_seen"] == T1 and by["Alpha|1"]["closed_at"] is None
+
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 2), "")], T3)      # gone twice in a row: closed
     by = {j["key"]: j for j in jobs}
     assert states(jobs) == {"Alpha|1": "closed", "Alpha|2": "open"}
-    assert by["Alpha|1"]["closed_at"] == T2 and by["Alpha|1"]["last_seen"] == T1
-    assert by["Alpha|2"]["first_seen"] == T1 and by["Alpha|2"]["last_seen"] == T2
+    assert by["Alpha|1"]["closed_at"] == T3 and by["Alpha|1"]["last_seen"] == T1 and "missed" not in by["Alpha|1"]
+    assert by["Alpha|2"]["first_seen"] == T1 and by["Alpha|2"]["last_seen"] == T3
 
-    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 1, 2), "")], T3)   # job 1 is back
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 1, 2), "")], T4)   # job 1 is back
     by = {j["key"]: j for j in jobs}
     assert by["Alpha|1"]["state"] == "open" and by["Alpha|1"]["closed_at"] is None
     assert by["Alpha|1"]["first_seen"] == T1
 
 
+def test_one_empty_answer_from_a_source_closes_nothing():
+    # seen for real: a job feed answering "200 OK" with no jobs in it for a moment
+    jobs = jr.update_jobs([], [(ALPHA, seen_open("Alpha", 1), "")], T1)
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha"), "")], T2)
+    assert states(jobs) == {"Alpha|1": "open"} and jobs[0]["missed"] == 1
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 1), "")], T3)      # the feed is itself again
+    assert states(jobs) == {"Alpha|1": "open"} and "missed" not in jobs[0]
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha"), "")], T4)         # the count started over
+    assert states(jobs) == {"Alpha|1": "open"}
+
+
+def test_a_failed_check_between_two_misses_does_not_reset_or_add():
+    jobs = jr.update_jobs([], [(ALPHA, seen_open("Alpha", 1), "")], T1)
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha"), "")], T2)
+    jobs = jr.update_jobs(jobs, [(ALPHA, None, "down")], T3)
+    assert states(jobs) == {"Alpha|1": "open"} and jobs[0]["missed"] == 1
+    jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha"), "")], T4)
+    assert states(jobs) == {"Alpha|1": "closed"}
+
+
 def test_jobs_failed_source_never_closes_anything():
     jobs = jr.update_jobs([], [(ALPHA, seen_open("Alpha", 1), ""), (BETA, seen_open("Beta", 7), "")], T1)
     jobs = jr.update_jobs(jobs, [(ALPHA, None, "HTTP 403 Forbidden"), (BETA, seen_open("Beta"), "")], T2)
+    jobs = jr.update_jobs(jobs, [(ALPHA, None, "HTTP 403 Forbidden"), (BETA, seen_open("Beta"), "")], T3)
     by = {j["key"]: j for j in jobs}
     assert by["Alpha|1"]["state"] == "open" and by["Alpha|1"]["last_seen"] == T1   # untouched
     assert by["Beta|7"]["state"] == "closed"
@@ -899,6 +928,7 @@ def test_jobs_keep_a_known_deadline_and_use_alert_time_as_first_seen():
 
 
 def test_jobs_history_is_capped_dropping_oldest_closed_first(monkeypatch):
+    monkeypatch.setattr(jr, "CLOSE_AFTER_MISSES", 1)
     monkeypatch.setattr(jr, "MAX_JOB_HISTORY", 3)
     jobs = jr.update_jobs([], [(ALPHA, seen_open("Alpha", 1, 2, 3), "")], T1)
     jobs = jr.update_jobs(jobs, [(ALPHA, seen_open("Alpha", 2, 3), "")], T2)          # 1 closes first
@@ -913,7 +943,8 @@ def test_jobs_history_is_capped_dropping_oldest_closed_first(monkeypatch):
     assert states(jobs) == {"Alpha|2": "closed", "Alpha|3": "open", "Alpha|4": "open", "Alpha|5": "open"}  # the older closed one went
 
 
-def test_jobs_ignore_garbage_in_the_old_file():
+def test_jobs_ignore_garbage_in_the_old_file(monkeypatch):
+    monkeypatch.setattr(jr, "CLOSE_AFTER_MISSES", 1)
     jobs = jr.update_jobs([None, "x", {"no": "key"}, {"key": "Alpha|9", "target": "Alpha", "state": "open"}],
                           [(ALPHA, seen_open("Alpha", 1), "")], T1)
     assert states(jobs) == {"Alpha|9": "closed", "Alpha|1": "open"}
@@ -933,8 +964,14 @@ def test_run_writes_jobs_file_and_run_log(monkeypatch):
     fake_sources(monkeypatch, {"Alpha": result_with(), "Beta": requests.ConnectionError("down")})
     jr.run_radar(two_targets())
     data = json.loads(jr.JOBS_PATH.read_text(encoding="utf-8"))
+    assert data["jobs"][0]["state"] == "open"            # gone once: still open, on every list the dashboard reads
+    assert [o["key"] for o in status()["targets"][0]["open"]] == [hit("Alpha", 1).key]
+    assert status()["targets"][0]["open"][0]["deadline"] == "2026-12-01"
+    jr.run_radar(two_targets())
+    data = json.loads(jr.JOBS_PATH.read_text(encoding="utf-8"))
     assert data["jobs"][0]["state"] == "closed"
-    assert len(status()["runs"]) == 2
+    assert status()["targets"][0]["open"] == []
+    assert len(status()["runs"]) == 3
 
 
 def test_run_log_is_capped(monkeypatch):
@@ -1403,14 +1440,17 @@ def test_run_writes_log_and_history_newest_event_first(monkeypatch):
     jr.run_radar(two_targets())
     fake_sources(monkeypatch, {"Alpha": result_with(), "Beta": requests.ConnectionError("down")})
     jr.run_radar(two_targets())
+    jr.run_radar(two_targets())
     st = status()
     assert [(e["type"], e["target"]) for e in st["events"]] == [
-        ("closed", "Alpha"), ("fail", "Beta"), ("check", ""),      # second run
+        ("closed", "Alpha"), ("check", ""),                        # third run: gone twice, so closed now
+        ("fail", "Beta"), ("check", ""),                           # second run
         ("new", "Alpha"), ("check", ""),                           # first run
     ]
-    assert st["events"][2]["text"] == "2 kilder sjekket, 0 ledig, 1 feilet"
-    assert [(h["n"], h["fail"]) for h in st["history"]] == [({"alpha": 3, "beta": 3}, []), ({"alpha": 3}, ["beta"])]
-    assert st["history"][1]["t"] == st["generated"]
+    assert st["events"][1]["text"] == "2 kilder sjekket, 0 ledig, 1 feilet"
+    assert st["events"][3]["text"] == "2 kilder sjekket, 1 ledig, 1 feilet"
+    assert [(h["n"], h["fail"]) for h in st["history"]] == [({"alpha": 3, "beta": 3}, []), ({"alpha": 3}, ["beta"]), ({"alpha": 3}, ["beta"])]
+    assert st["history"][2]["t"] == st["generated"]
 
 
 def test_first_run_with_a_log_seeds_it_from_old_alerts_and_closed_jobs(monkeypatch):
@@ -1437,3 +1477,310 @@ def test_log_and_history_are_capped(monkeypatch):
     for _ in range(5):
         jr.run_radar(two_targets())
     assert len(status()["events"]) == 3 and len(status()["history"]) == 2
+
+
+# ------------------------------------------------- reading the ad itself
+
+# shaped like the real Norwegian ad of 15.11.2026 (the contact person is left out on purpose)
+NORWEGIAN_AD = """Career Opportunities: Lead Customer Service Agent, OSL (3133) Requisition ID 3133 - Posted - Oslo Airport
+Lead Customer Service Agent, OSL Application deadline: 20.11.2026 Location: Norway Type of contract: Permanent
+We are recruiting for two operational profiles on 75% permanent contracts: Customer Service Agent and Gate Lead.
+Both positions operate in a rotating shift pattern (early mornings, evenings, and weekends).
+Travel in Europe with massively discounted employee priced tickets. Fast-paced days.
+You have good English language skills, both verbal and written. Preferbly scaninavian speaking.
+You have lived continuously in an EU/EEA country for the last 5 years. You can provide a clean criminal record and
+complete 5-year background documentation to obtain Avinor security clearance and airport ID.
+Please contact: Kari Nordmann Station Manager kari.nordmann@example.test +47 900 00 000
+Travel required: No travelling required Application deadline: 20.11.2026"""
+
+
+def test_facts_from_the_real_norwegian_ad():
+    assert jr.extract_facts(NORWEGIAN_AD) == {
+        "deadline": "2026-11-20", "percent": "75 %", "contract": "FAST",
+        "tags": ["NORSK", "ENGELSK", "BAKGRUNNSSJEKK", "SKIFT"]}
+
+
+def test_facts_keep_nothing_personal():
+    kept = json.dumps(jr.extract_facts(NORWEGIAN_AD), ensure_ascii=False).lower()
+    assert not any(word in kept for word in ("kari", "nordmann", "@", "900"))
+
+
+@pytest.mark.parametrize("text, deadline", [
+    ("Søknadsfrist: 6. november 2026. Tiltredelse 01.01.2027", "2026-11-06"),
+    ("Apply by 20 November 2026", "2026-11-20"),
+    ("Frist: 01.12.2026", "2026-12-01"),
+    ("Søknadsfrist: Fredag 6. november 2026", "2026-11-06"),
+    ("Søknadsfrist 2026-11-30 kl. 23:59", "2026-11-30"),
+    ("Søknadsfrist: snarest. Søknadsfrist: 04.12.2026", "2026-12-04"),              # a second, real label further down
+    ("Søknadsfrist: snarest. Oppstart 01.02.2027 eller etter avtale.", None),      # the date is the start, not the deadline
+    ("Publisert 03.11.2026. Vi holder til på Gardermoen. Oppstart 2027-01-05.", None),   # dates, but no deadline label
+    ("Application deadline: [[applDeadline]] Location: Norway", None),              # the unfilled feed template
+    ("Søknadsfrist: 31.02.2026", None),
+    ("", None),
+])
+def test_a_date_is_a_deadline_only_right_after_a_deadline_label(text, deadline):
+    assert jr.extract_facts(text)["deadline"] == deadline
+
+
+@pytest.mark.parametrize("text, percent", [
+    ("Vi søker kundeveileder i 100 % stilling", "100 %"),
+    ("Stillingsprosent: 60", "60 %"),
+    ("Vikariat, 50-80 % stilling etter avtale", "50–80 %"),
+    ("Dette er en heltidsstilling. Heltid.", "100 %"),
+    ("Deltid, helg og kveld", "DELTID"),
+    ("Both full-time and part-time positions", ""),            # says both: we do not guess
+    ("20 % rabatt på flyreiser og 100 % engasjement", ""),     # a percentage that is not the job size
+    ("5 % stilling", ""),                                      # not a believable size
+    ("250 % stilling", ""),
+    ("Stillingsprosent: 0", ""),
+])
+def test_percent(text, percent):
+    assert jr.extract_facts(text)["percent"] == percent
+
+
+@pytest.mark.parametrize("text, contract", [
+    ("Type of contract: Temporary. We also have permanent staff.", "VIKARIAT"),   # the label wins over other words
+    ("Ansettelsesform: Fast", ""),                                                 # "fast" alone is too loose a word
+    ("Ansettelsesform: Fast stilling", "FAST"),
+    ("Tilkallingsvikar til sommeren", "TILKALLING"),
+    ("Sommerjobb 2027 på Oslo lufthavn", "SESONG"),
+    ("A fast-paced environment with great colleagues", ""),
+    ("Midlertidig stilling med mulighet for fast ansettelse", "VIKARIAT"),        # the kind named first
+])
+def test_contract(text, contract):
+    assert jr.extract_facts(text)["contract"] == contract
+
+
+@pytest.mark.parametrize("text, tags", [
+    ("Du behersker norsk og engelsk, muntlig og skriftlig. Førerkort klasse B. Plettfri vandel. Turnus. Fylt 18 år.",
+     ["NORSK", "ENGELSK", "FØRERKORT", "BAKGRUNNSSJEKK", "SKIFT", "18 ÅR"]),
+    ("Norwegian is the most loved airline. Join Norwegian today.", []),           # the employer's name is not a language demand
+    ("Vi tilbyr gode betingelser.", []),
+])
+def test_tags(text, tags):
+    assert jr.extract_facts(text)["tags"] == tags
+
+
+def ads(monkeypatch, pages):
+    """pages: {link: ad text or None}. Returns the list of links that were opened."""
+    opened = []
+
+    def fake(link):
+        opened.append(link)
+        return pages.get(link)
+
+    monkeypatch.setattr(jr, "fetch_ad_text", fake)
+    return opened
+
+
+DAY = _date(2026, 11, 15)
+
+
+def test_read_details_fills_deadline_and_facts_and_tells_the_alert(monkeypatch):
+    h = hit("Alpha", 1)
+    opened = ads(monkeypatch, {h.link: NORWEGIAN_AD.lower()})
+    result = result_with(h)
+    assert jr.read_details(result, [], DAY, 6) == 1 and opened == [h.link]
+    item = result.open[0]
+    assert item["deadline"] == "2026-11-20"
+    assert item["details"] == {"percent": "75 %", "contract": "FAST", "tags": ["NORSK", "ENGELSK", "BAKGRUNNSSJEKK", "SKIFT"], "read": "2026-11-15"}
+    assert result.hits[0].text == "Job 1 · frist 20.11.2026 · 75 % · fast" and result.hits[0].key == h.key
+
+
+def test_read_details_uses_the_detail_link_and_never_overrides_a_listed_deadline(monkeypatch):
+    h = hit("Alpha", 1)
+    opened = ads(monkeypatch, {"https://feed.test/ad/1": NORWEGIAN_AD.lower()})
+    result = result_with(h, deadline="2026-12-24")
+    result.open[0]["detail_link"] = "https://feed.test/ad/1"
+    jr.read_details(result, [], DAY, 6)
+    assert opened == ["https://feed.test/ad/1"]
+    assert result.open[0]["deadline"] == "2026-12-24"                 # the list said so; the ad does not get to change it
+    assert result.hits[0].text == "Job 1 · 75 % · fast"               # and the alert does not repeat a deadline it already has
+
+
+def test_read_details_reads_each_ad_once_and_retries_a_missing_deadline_once_a_day(monkeypatch):
+    h = hit("Alpha", 1)
+    opened = ads(monkeypatch, {h.link: "x" * 400})                    # readable, but states nothing
+    result = result_with(h)
+    jr.read_details(result, [], DAY, 6)
+    jobs = jr.update_jobs([], [(ALPHA, result, "")], T1)
+    assert jobs[0]["details_tried"] == "2026-11-15" and jobs[0]["details"]["percent"] == "" and jobs[0]["deadline"] is None
+
+    again = result_with(h)
+    assert jr.read_details(again, jobs, DAY, 6) == 0 and len(opened) == 1      # same day: not opened again
+    jobs = jr.update_jobs(jobs, [(ALPHA, again, "")], T2)
+    assert jobs[0]["details_tried"] == "2026-11-15" and jobs[0]["details"]["read"] == "2026-11-15"
+
+    assert jr.read_details(result_with(h), jobs, _date(2026, 11, 16), 6) == 1  # next day: one more try
+
+    done = [dict(jobs[0], deadline="2026-12-01")]                               # details and a deadline: finished
+    assert jr.read_details(result_with(h), done, _date(2026, 11, 17), 6) == 0
+    assert len(opened) == 2
+
+
+def test_read_details_stops_at_the_budget_and_survives_unreadable_ads(monkeypatch):
+    hits = [hit("Alpha", n) for n in range(1, 5)]
+    opened = ads(monkeypatch, {hits[1].link: NORWEGIAN_AD.lower()})   # ad 1 cannot be read, ad 2 can
+    result = result_with(*hits)
+    assert jr.read_details(result, [], DAY, 2) == 2 and opened == [hits[0].link, hits[1].link]
+    assert "details" not in result.open[0] and result.open[0]["details_tried"] == "2026-11-15"
+    assert result.open[1]["deadline"] == "2026-11-20"
+    assert "details_tried" not in result.open[2]                      # never reached: free to be read next run
+    assert [h.text for h in result.hits] == ["Job 1", "Job 2 · frist 20.11.2026 · 75 % · fast", "Job 3", "Job 4"]
+
+
+def test_read_details_leaves_ads_the_source_already_read(monkeypatch):
+    opened = ads(monkeypatch, {})
+    result = result_with(hit("Alpha", 1))
+    result.open[0]["details"] = {"percent": "100 %", "contract": "", "tags": [], "read": "2026-11-14"}
+    assert jr.read_details(result, [], DAY, 6) == 0 and opened == []
+
+
+def test_read_details_never_reads_the_list_page_as_if_it_were_the_ad(monkeypatch):
+    opened = ads(monkeypatch, {"https://alpha.test/jobs": NORWEGIAN_AD.lower()})
+    result = jr.CheckResult([], [jr.open_item("Alpha|1", "Job 1", "https://alpha.test/jobs/#stillinger"),
+                                 jr.open_item("Alpha|2", "Job 2", "")], 3)
+    assert jr.read_details(result, [], DAY, 6, "https://alpha.test/jobs") == 0 and opened == []
+    assert result.open[0]["deadline"] is None and "details" not in result.open[0]
+
+
+def test_fetch_ad_text_drops_scripts_and_refuses_empty_pages(monkeypatch):
+    monkeypatch.undo()   # the autouse stub replaced the function under test
+    body = "<html><script>var shift = 'turnus førerkort';</script><style>.x{}</style><noscript>Slå på JavaScript. Vandel.</noscript><p>" + "Søknadsfrist: 01.12.2026 " * 20 + "</p></html>"
+    monkeypatch.setattr(jr, "fetch", lambda method, url, **k: Resp(body))
+    text = jr.fetch_ad_text("https://x.test/ad")
+    assert "søknadsfrist: 01.12.2026" in text and "turnus" not in text and "førerkort" not in text and "vandel" not in text
+    monkeypatch.setattr(jr, "fetch", lambda method, url, **k: Resp("<html><p>Enable JavaScript</p></html>"))
+    assert jr.fetch_ad_text("https://x.test/ad") is None
+
+    def down(method, url, **k):
+        raise requests.ConnectionError("down")
+    monkeypatch.setattr(jr, "fetch", down)
+    assert jr.fetch_ad_text("https://x.test/ad") is None
+
+
+def result_with_open(*hits, listings=3):
+    """Postings that are live but already alerted: open, no new hit."""
+    return jr.CheckResult([], [jr.open_item(h.key, h.text, h.link) for h in hits], listings)
+
+
+def old_job(**over):
+    job = {"key": hit("Alpha", 1).key, "target": "Alpha", "title": "Job 1", "text": "Job 1", "link": hit("Alpha", 1).link,
+           "state": "open", "deadline": None, "first_seen": T1, "last_seen": T1, "closed_at": None}
+    job.update(over)
+    return job
+
+
+def seen_before():
+    jr.STATE_PATH.write_text(json.dumps({"heartbeat_week": this_week(), "seen": [hit("Alpha", 1).key]}), encoding="utf-8")
+
+
+def far_deadline():
+    return (jr.today_oslo() + jr.timedelta(days=20)).isoformat()
+
+
+def ad_with_deadline(iso):
+    return ("søknadsfrist: " + _date.fromisoformat(iso).strftime("%d.%m.%Y") + " ") + "vi søker folk. " * 30
+
+
+def test_run_finds_a_deadline_later_and_comments_on_the_jobs_issue_once(monkeypatch):
+    gh = GitHub(monkeypatch)
+    seen_before()
+    jr.JOBS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    jr.JOBS_PATH.write_text(json.dumps({"jobs": [old_job(issue=7)]}), encoding="utf-8")
+    due = far_deadline()
+    ads(monkeypatch, {hit("Alpha", 1).link: ad_with_deadline(due)})
+    fake_sources(monkeypatch, {"Alpha": lambda seen: result_with_open(hit("Alpha", 1)), "Beta": result_with()})
+    jr.run_radar(two_targets())
+    job = json.loads(jr.JOBS_PATH.read_text(encoding="utf-8"))["jobs"][0]
+    assert job["deadline"] == due and job["details"]["read"] == jr.today_oslo().isoformat()
+    assert len(gh.comments) == 1 and gh.comments[0][0] == 7 and "Frist funnet" in gh.comments[0][1]
+    assert gh.created == []                                            # no new alert: the job was already known
+    assert [(e["type"], e["target"]) for e in status()["events"]] == [("deadline", "Alpha"), ("check", "")]
+    assert due.replace("-", "") in jr.CALENDAR_PATH.read_text(encoding="utf-8")
+
+    jr.run_radar(two_targets())                                        # next run: nothing new to say
+    assert len(gh.comments) == 1
+    assert [e["type"] for e in status()["events"]] == ["check", "deadline", "check"]
+
+
+def test_a_late_deadline_that_is_close_is_left_to_the_reminder(monkeypatch):
+    gh = GitHub(monkeypatch)
+    seen_before()
+    jr.JOBS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    jr.JOBS_PATH.write_text(json.dumps({"jobs": [old_job(issue=7)]}), encoding="utf-8")
+    due = (jr.today_oslo() + jr.timedelta(days=2)).isoformat()
+    ads(monkeypatch, {hit("Alpha", 1).link: ad_with_deadline(due)})
+    fake_sources(monkeypatch, {"Alpha": lambda seen: result_with_open(hit("Alpha", 1)), "Beta": result_with()})
+    jr.run_radar(two_targets())
+    assert len(gh.comments) == 1 and "Frist om 2 dager" in gh.comments[0][1]     # one message, not two
+    assert [e["type"] for e in status()["events"]] == ["deadline", "reminder", "check"]
+
+
+def test_a_late_deadline_is_not_announced_when_you_closed_the_jobs_issue(monkeypatch):
+    gh = GitHub(monkeypatch)
+    gh.closed_by_user.add(7)
+    job = old_job(issue=7, deadline=far_deadline())
+    assert jr.send_deadline_found({}, [job], jr.today_oslo()) == []
+    assert gh.comments == [] and gh.created == []
+    gh.closed_by_user.clear()
+    assert jr.send_deadline_found({}, [job], jr.today_oslo()) == [job] and len(gh.comments) == 1
+
+
+def test_late_deadlines_are_only_jobs_known_before_without_one():
+    before = [old_job(), old_job(key="b", deadline="2026-12-01"), old_job(key="c"), old_job(key="e")]
+    after = [old_job(deadline="2026-12-05"), old_job(key="b", deadline="2026-12-02"),
+             old_job(key="c", deadline="2026-12-05", state="closed"), old_job(key="d", deadline="2026-12-05"),
+             old_job(key="e", deadline="2026-12-05")]
+    # b had one already, c is closed, d is brand new, e is being alerted in this very run
+    assert [j["key"] for j in jr.late_deadlines(before, after, skip_keys={"e"})] == [hit("Alpha", 1).key]
+
+
+def test_a_late_deadline_for_a_job_without_an_issue_is_a_closed_notice(monkeypatch):
+    gh = GitHub(monkeypatch)
+    seen_before()
+    jr.JOBS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    jr.JOBS_PATH.write_text(json.dumps({"jobs": [old_job()]}), encoding="utf-8")
+    ads(monkeypatch, {hit("Alpha", 1).link: ad_with_deadline(far_deadline())})
+    fake_sources(monkeypatch, {"Alpha": lambda seen: result_with_open(hit("Alpha", 1)), "Beta": result_with()})
+    jr.run_radar(two_targets())
+    assert len(gh.created) == 1 and gh.created[0]["title"].startswith("📅 Frist funnet") and gh.closed == ["41"]
+
+
+def test_a_new_job_gets_its_facts_in_the_alert_and_no_separate_deadline_notice(monkeypatch):
+    gh = GitHub(monkeypatch)
+    no_heartbeat()
+    due = far_deadline()
+    ads(monkeypatch, {hit("Alpha", 1).link: ad_with_deadline(due) + " 75 % stilling"})
+    fake_sources(monkeypatch, {"Alpha": lambda seen: result_with(*[h for h in [hit("Alpha", 1)] if h.key not in seen]), "Beta": result_with()})
+    jr.run_radar(two_targets())
+    when = _date.fromisoformat(due).strftime("%d.%m.%Y")
+    assert [i["title"] for i in gh.created] == [f"🚨 MULIG TREFF: Job 1 · frist {when} · 75 %"]
+    assert gh.comments == []
+    assert [e["type"] for e in status()["events"]] == ["new", "check"]
+    assert json.loads(jr.JOBS_PATH.read_text(encoding="utf-8"))["jobs"][0]["deadline"] == due
+
+
+def test_an_ad_reader_that_blows_up_never_fails_the_source(monkeypatch):
+    no_heartbeat()
+
+    def boom(link):
+        raise RuntimeError("parser exploded")
+    monkeypatch.setattr(jr, "fetch_ad_text", boom)
+    fake_sources(monkeypatch, {"Alpha": result_with(hit("Alpha", 1)), "Beta": result_with()})
+    assert jr.run_radar(two_targets()) == 0
+    assert status()["targets"][0]["ok"] is True and state()["fail"]["Alpha"] == 0
+
+
+def test_event_when_a_source_with_listings_answers_with_none():
+    report = [rep("Alpha", listings=0), rep("Beta", listings=0), rep("Gamma", listings=4), rep("Nav", listings=None)]
+    ev = jr.build_events([], report, {}, [], [], T2, prev_listings={"Alpha": 17, "Beta": 0, "Gamma": 9, "Nav": None})
+    assert kinds(ev) == [
+        ("empty", "Alpha", "0 stillinger på siden, var 17. Kan være en feil hos kilden"),
+        ("check", "", "4 kilder sjekket, 0 ledig")]
+
+
+def test_nav_ads_carry_their_facts_without_an_extra_request():
+    facts = jr.nav_facts({"title": "Servicemedarbeider", "description": "<p>Vi søker i <b>80 % stilling</b>, vikariat. Turnus.</p>",
+                          "extent": "Deltid", "employer": {"name": "Stille AS"}, "expires": None})
+    assert (facts["percent"], facts["contract"], facts["tags"]) == ("80 %", "VIKARIAT", ["SKIFT"])
