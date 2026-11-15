@@ -12,6 +12,15 @@
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <title>JOBBRADAR · Oslo</title>
+<script>
+/* tema før første tegning, så siden ikke blinker i feil farger */
+(function () {
+  var t = "auto";
+  try { t = JSON.parse(localStorage.getItem("radar.tema") || '"auto"'); } catch (e) {}
+  if (["mork", "lys", "skilt"].indexOf(t) < 0) t = window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "lys" : "mork";
+  document.documentElement.setAttribute("data-tema", t);
+})();
+</script>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -24,7 +33,7 @@
   <div class="radarline"><span class="dot off" id="rdot"></span><span id="rtekst">RADAR: SJEKKER…</span></div>
   <div class="radarline" id="lediglinje" hidden><span class="dot gul"></span><span id="ledigtotal"></span></div>
   <nav>
-    <a href="#skjerm">SKJERM</a><a href="#naa">NÅ</a><a href="#soknader">SØKNADER</a><a href="#logg">LOGG</a><a href="#tavle">TAVLE</a><a href="#vinduer">VINDUER</a><a href="#radar">RADAR</a><a href="#kopi">KOPI</a><a href="?tv" id="tvknapp">TV-MODUS</a>
+    <a href="#scope">SKJERM</a><a href="#naa">NÅ</a><a href="#soknader">SØKNADER</a><a href="#logg">LOGG</a><a href="#tavle">TAVLE</a><a href="#vinduer">VINDUER</a><a href="#radar">RADAR</a><a href="#kopi">KOPI</a><a href="?tv" id="tvknapp">TV-MODUS</a><a href="#" id="temaknapp" role="button">TEMA: AUTO</a>
   </nav>
 </header>
 
@@ -35,7 +44,10 @@
   <!-- ================= SKJERM: radarskjerm og avgangstavle ================= -->
   <section id="skjerm">
     <div class="skjerm">
-      <div class="scope" id="scope"></div>
+      <div class="scopekol">
+        <div class="scope" id="scope"></div>
+        <div class="blipkort" id="blipkort" hidden></div>
+      </div>
       <div class="tvpanel" id="tvpanel" data-vis="avganger">
         <div class="rute" data-rute="avganger"><h2>AVGANGER</h2><div class="flapboard" id="avganger"></div></div>
         <div class="rute" data-rute="logg"><h2>LOGG</h2><div id="tvlogg"></div></div>
@@ -43,6 +55,9 @@
       </div>
     </div>
   </section>
+
+  <!-- ================= OVERSIKT: tallene, på bred skjerm ================= -->
+  <div class="oversikt" id="oversikt"></div>
 
   <!-- ================= NÅ: stillingene du vil ha, som er ute akkurat nå ================= -->
   <section id="naa">
@@ -79,14 +94,8 @@
   <!-- ================= VINDUER ================= -->
   <section id="vinduer">
     <h2>VINDUER</h2>
-    <div class="rader">
-      <div class="rad"><div class="rn">ISS vikarbatch<small>historisk utlyst rundt desember og januar</small></div><div class="rd" data-frist="2026-12-01">–</div></div>
-      <div class="rad"><div class="rn">SAS GH sommerbatch, servicemedarbeider<small>sist utlyst 28. desember, frist slutten av januar og midten av februar</small></div><div class="rd" data-frist="2026-12-28">–</div></div>
-      <div class="rad"><div class="rn">Vy hovedbatch for sommer 2027<small>vinter og tidlig vår</small></div><div class="rd" data-frist="2027-02-01">–</div></div>
-      <div class="rad"><div class="rn">Widerøe GH, OSL<small>tok over Lufthansa Group på OSL 1. oktober 2026, nye kontrakter betyr ofte nye folk. Ingen fast batch kjent ennå</small></div><div class="rd">LØPENDE</div></div>
-      <div class="rad"><div class="rn">Norwegian / Red Handling, OSL<small>egen handling på OSL siden mars 2023. Ingen fast batch kjent ennå</small></div><div class="rd">LØPENDE</div></div>
-      <div class="rad"><div class="rn">ISS tilkalling<small>dukker opp hele året, fortløpende vurdering, fart teller</small></div><div class="rd">LØPENDE</div></div>
-    </div>
+    <div id="vinduliste"><div class="tom">LASTER…</div></div>
+    <p class="fotnote">Datoene er dine egne anslag fra tidligere år (config.json), ikke noe arbeidsgiverne har lovet.</p>
     <p class="fotnote">Menneskekanalen slår alle vinduene: tidligere leder hos SGH, folk du kjenner på OSL, kundeveileder i gul vest på Oslo S. Navn først, søknad etterpå.</p>
     <h3>HISTORIKK · UTLYSNINGER SOM ER LUKKET</h3>
     <div id="historikk"></div>
@@ -117,9 +126,19 @@
 
 </main>
 
-<footer>JOBBRADAR · BYGD 09.07.2026 · VERSJON 5 · MASKINEN VARSLER, DU SØKER</footer>
+<footer>JOBBRADAR · BYGD 09.07.2026 · VERSJON 6 · MASKINEN VARSLER, DU SØKER</footer>
 
 <div id="toast" role="status"></div>
+
+<!-- boardingkort: én stilling i detalj. Fylles av app.js -->
+<div id="kort" hidden>
+  <div class="kortbak" data-lukk></div>
+  <div class="pass" id="pass" role="dialog" aria-modal="true" aria-labelledby="passtittel" tabindex="-1"></div>
+</div>
+
+<!-- NY AVGANG: vises noen sekunder når radaren finner en ny stilling mens siden står åpen -->
+<div id="avgang" hidden></div>
+
 <div id="ticker" hidden></div>
 
 <script src="app.js"></script>

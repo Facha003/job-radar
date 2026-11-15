@@ -30,7 +30,10 @@ GitHub Actions (cron every 10 min, paced to one real check per ~30 min)
        └─ commits seen.json + docs/status.json + docs/jobs.json
 GitHub Pages
   └─ docs/ (plain HTML, CSS and JavaScript, no build step, departure board style)
-       ├─ a radar scope with one blip per source, and a split-flap departure board of open jobs
+       ├─ a radar scope with one blip per source (tap one for its numbers), and a split-flap
+       │    departure board of open jobs, filled out with the expected hiring windows when few are open
+       ├─ a boarding pass for each job: deadline, percent, contract, requirements, my status and notes
+       ├─ a control-room layout on wide screens, one column on the phone, three themes
        ├─ a log and ticker of what the radar did, trend lines of each source's listing count
        ├─ TV mode (add ?tv to the address) for a spare screen
        ├─ every wanted job with a deadline countdown
@@ -71,6 +74,8 @@ GitHub Pages
 **Read the ad, not just the list.** Job lists often leave the deadline out: Norwegian's feed carries an unfilled template (`[[applDeadline]]`) where the date should be, so a posting with five days left showed "deadline unknown". The radar now opens the ad of every wanted posting (at most six per run, a posting with nothing found once a day) and reads the deadline, the size of the position, the contract type and the requirements. A date only counts as the deadline when it stands right after a deadline label, so a start date is never mistaken for one, and a deadline the list itself states always wins. Nothing personal from the ad is stored: the repository is public.
 
 **One empty answer closes nothing.** A feed can answer "200 OK" with no jobs in it for a moment (seen on the SuccessFactors feed). A posting is only marked closed after it is missing from two checks in a row, and a source that had listings and suddenly shows none gets a line in the log the same hour.
+
+**Estimates are labelled as estimates.** When fewer than six wanted jobs are open, the departure board fills its empty rows with the hiring windows from `config.json` (when each employer has posted in earlier years). They sit under their own divider marked as estimates, never above a real posting, and they go away as real jobs arrive.
 
 **Closing the issue is the off switch.** Each job gets its own GitHub issue. Deadline reminders go there as comments, and stop when the issue is closed. The radar never needs to know whether I applied: that stays in my browser, and a closed issue in a public repo says nothing about why it was closed.
 

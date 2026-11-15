@@ -1,4 +1,5 @@
-/* JOBBRADAR, versjon 4. Avgangstavle: gult på mørkt, mono for alt som er data. */
+/* JOBBRADAR, versjon 6. Avgangstavle: gult på mørkt, mono for alt som er data.
+   Fargene er variabler, så temaene (mørk, lys, skilt) nederst bare bytter verdier. */
 :root{
   --bg:#131417;
   --panel:#1a1c20;
@@ -6,8 +7,15 @@
   --line:#2c3038;
   --amber:#ffb100;        /* avviksgul */
   --amber-dim:#8a6200;
+  --amber-fill:#ffb100;   /* gul som flate (knapper, brikker), med --paa-gul som tekst oppå */
+  --paa-gul:#0d0d0f;
+  --hode:rgba(19,20,23,.94);
+  --topp:#131417;         /* fargen telefonen gir statuslinja */
+  --stripe:rgba(0,0,0,.14);
+  --flap1:#26292f; --flap2:#1d2025;
+  --plass:#5c626b;        /* plassholdertekst */
   --ok:#3ec97e;
-  --fail:#ff5049;
+  --fail:#ff6159;
   --ink:#ece9e0;
   --mut:#8f96a0;
   --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
@@ -23,13 +31,13 @@ body{
 }
 body::before{ /* avviksstripe */
   content:"";display:block;height:4px;
-  background:repeating-linear-gradient(45deg,var(--amber) 0 14px,#0d0d0f 14px 28px);
+  background:repeating-linear-gradient(45deg,var(--amber-fill) 0 14px,#0d0d0f 14px 28px);
 }
 
 /* ---------- header / stasjonsklokke ---------- */
 header{
   position:sticky;top:0;z-index:30;
-  background:rgba(19,20,23,.94);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  background:var(--hode);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
   border-bottom:1px solid var(--line);
   padding:10px 14px 8px;
 }
@@ -40,9 +48,9 @@ header{
 .radarline{display:flex;align-items:center;gap:8px;margin-top:5px;font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--mut)}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--mut);flex:0 0 auto}
 .dot.live{background:var(--ok);animation:pulse 1.6s ease-in-out infinite}
-.dot.stale{background:var(--amber)}
+.dot.stale{background:var(--amber-fill)}
 .dot.off{background:var(--fail)}
-.dot.gul{background:var(--amber);animation:pulse 1.2s ease-in-out infinite}
+.dot.gul{background:var(--amber-fill);animation:pulse 1.2s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 #ledigtotal{color:var(--amber);font-weight:700}
 nav{display:flex;gap:6px;overflow-x:auto;margin-top:8px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
@@ -76,11 +84,11 @@ h3{
 .flap{
   font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.12em;
   padding:6px 22px 6px 10px;border-radius:3px;border:1px solid var(--line);
-  background:linear-gradient(#26292f 49%, #1d2025 51%);color:var(--amber);
+  background:linear-gradient(var(--flap1) 49%, var(--flap2) 51%);color:var(--amber);
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.4);
   appearance:none;-webkit-appearance:none;cursor:pointer;max-width:100%;
 }
-.flap.gul{color:#0d0d0f;background:var(--amber);border-color:var(--amber)}
+.flap.gul{color:var(--paa-gul);background:var(--amber-fill);border-color:var(--amber-fill)}
 .flap.gronn{color:var(--ok)}
 .flap.graa{color:var(--mut)}
 .flap.rod{color:var(--fail)}
@@ -94,14 +102,14 @@ h3{
   padding:6px 11px;white-space:nowrap;cursor:pointer;min-height:32px;
 }
 .chip b{color:var(--ink);font-weight:600;margin-left:4px}
-.chip.on{color:#0d0d0f;background:var(--amber);border-color:var(--amber);font-weight:700}
-.chip.on b{color:#0d0d0f}
+.chip.on{color:var(--paa-gul);background:var(--amber-fill);border-color:var(--amber-fill);font-weight:700}
+.chip.on b{color:var(--paa-gul)}
 
 /* ---------- jobbkort ---------- */
 .jobb{
   background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);
   border-radius:6px;padding:12px;margin-bottom:10px;
-  background-image:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.14) 3px 4px);
+  background-image:repeating-linear-gradient(0deg,transparent 0 3px,var(--stripe) 3px 4px);
 }
 .jobb.haster{border-left-color:var(--fail);box-shadow:0 0 22px rgba(255,80,73,.12)}
 .jobb.dempet{border-left-color:var(--line);opacity:.62}
@@ -118,7 +126,7 @@ textarea.notat{
   width:100%;margin-top:10px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;
   color:var(--ink);font-family:var(--body);font-size:16px;padding:8px;min-height:40px;resize:vertical;
 }
-textarea.notat::placeholder{color:#5c626b}
+textarea.notat::placeholder{color:var(--plass)}
 
 /* ---------- søknader ---------- */
 .teller{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
@@ -140,7 +148,7 @@ textarea.notat::placeholder{color:#5c626b}
 /* ---------- tavle ---------- */
 .board{
   background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;
-  background-image:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.14) 3px 4px);
+  background-image:repeating-linear-gradient(0deg,transparent 0 3px,var(--stripe) 3px 4px);
 }
 .brow{border-bottom:1px solid var(--line);padding:12px;transition:background .3s, box-shadow .3s}
 .brow:last-child{border-bottom:none}
@@ -174,7 +182,7 @@ textarea.notat::placeholder{color:#5c626b}
   text-decoration:none;cursor:pointer;user-select:none;-webkit-user-select:none;
 }
 .btn:active{transform:translateY(1px)}
-.btn.gul{background:var(--amber);border-color:var(--amber);color:#0d0d0f;font-weight:700}
+.btn.gul{background:var(--amber-fill);border-color:var(--amber-fill);color:var(--paa-gul);font-weight:700}
 .btn.smal{min-height:36px;padding:7px 11px;font-size:11.5px}
 
 textarea.kopi{
@@ -206,11 +214,13 @@ footer{
 #skjerm{margin-top:16px}
 .skjerm{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
 .tvpanel,.rute{min-width:0}
-@media(min-width:900px){ main{max-width:1060px} .skjerm{grid-template-columns:320px minmax(0,1fr);align-items:start}
-  #naa,#soknader,#logg,#tavle,#vinduer,#radar,#kopi{max-width:680px;margin-inline:auto} }
+@media(min-width:700px){ main{max-width:1060px} .skjerm{grid-template-columns:320px minmax(0,1fr);align-items:start}
+  #naa,#soknader,#logg,#vinduer,#radar,#kopi{max-width:680px;margin-inline:auto} }
 
 /* ---------- radarskjerm ---------- */
-.scope{max-width:340px;margin:0 auto;width:100%}
+.scopekol{min-width:0}
+.scope{max-width:340px;margin:0 auto;width:100%;background:#0b0c0e;border:1px solid var(--line);border-radius:8px;padding:8px 8px 10px}
+.scope .halestopp{stop-color:var(--ok)}
 .scope svg{display:block;width:100%;height:auto;overflow:visible}
 .scope .skive{fill:#0d1210;stroke:#1f3a2c;stroke-width:1.2}
 .scope .rutenett{fill:none;stroke:#1f3a2c;stroke-width:.7}
@@ -293,7 +303,7 @@ body.harticker{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 /* ---------- ny data ---------- */
 #toast{
   position:fixed;left:50%;top:14px;z-index:60;transform:translate(-50%,-70px);opacity:0;
-  background:var(--amber);color:#0d0d0f;font-family:var(--mono);font-weight:700;font-size:12.5px;letter-spacing:.14em;
+  background:var(--amber-fill);color:var(--paa-gul);font-family:var(--mono);font-weight:700;font-size:12.5px;letter-spacing:.14em;
   padding:9px 16px;border-radius:4px;transition:transform .35s ease,opacity .35s ease;pointer-events:none;
 }
 #toast.vis{transform:translate(-50%,0);opacity:1}
@@ -301,13 +311,13 @@ body.harticker{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 /* ---------- TV-modus ---------- */
 body.tv{padding-bottom:0;overflow:hidden;cursor:none;height:100vh}
 body.tv::before{display:none}
-body.tv nav,body.tv footer,body.tv #lagringsvarsel,body.tv main>section:not(#skjerm){display:none}
+body.tv nav,body.tv footer,body.tv #lagringsvarsel,body.tv main>section:not(#skjerm),body.tv #oversikt,body.tv #blipkort,body.tv #kort{display:none}
 body.tv header{position:static;padding:1.4vh 2vw;background:none;border-bottom:1px solid var(--line)}
 body.tv .brand{font-size:2.6vh} body.tv #klokke{font-size:3.4vh} body.tv .radarline{font-size:1.9vh;margin-top:.6vh}
 body.tv main{max-width:none;padding:0 2vw;transform:translate(var(--skift,0,0))}
 body.tv #skjerm{margin:0;animation:none}
 body.tv .skjerm{grid-template-columns:42vw minmax(0,1fr);gap:2.5vw;align-items:center;height:calc(100vh - 13vh - 6vh)}
-body.tv .scope{max-width:min(42vw,72vh)}
+body.tv .scope{max-width:min(42vw,72vh);background:none;border:none;padding:0}
 body.tv .scopetekst{font-size:2vh;margin-top:1.5vh}
 body.tv h2{font-size:2vh;margin-bottom:1.6vh}
 body.tv .rute{display:none}
@@ -328,3 +338,165 @@ body.tv #toast{font-size:2.2vh;top:3vh}
   .blip .prikk{opacity:1}
   #ticker .spor{animation:none}
 }
+
+
+/* =====================================================================
+   VERSJON 6: kontrollrom på bred skjerm, boardingkort, tavle som aldri
+   står tom, kort for hver kilde, og tre temaer.
+   ===================================================================== */
+
+/* ---------- skjermflatene (tavle, radar, løpende tekst) er mørke i alle temaer ---------- */
+.flapboard,#ticker,.scope,#avgang{
+  --amber:#ffb100;--amber-dim:#8a6200;--ok:#3ec97e;--fail:#ff5049;--ink:#ece9e0;--mut:#8f96a0;--line:#2c3038;
+  color:var(--ink);
+}
+
+/* lange ord i skrapte titler skal brytes, ikke skyve siden bredere */
+.jtittel,.rad .rn,.ledig a,.alert,.bkjobb,.dest{overflow-wrap:anywhere}
+
+/* ---------- det radaren leste i annonsen ---------- */
+.fakta{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.brikke{font-family:var(--mono);font-size:10px;letter-spacing:.1em;border:1px solid var(--line);border-radius:3px;padding:3px 7px;color:var(--mut);white-space:nowrap}
+.brikke.hoved{color:var(--amber);border-color:var(--amber-dim)}
+.jfot{display:flex;justify-content:flex-end;margin-top:8px}
+.jobb[data-kort],.rad[data-kort]{cursor:pointer}
+
+/* ---------- tavle: streken over det som bare ventes ---------- */
+.fskille{display:flex;align-items:center;gap:8px;font-size:9px;letter-spacing:.18em;color:var(--mut);margin:11px 0 8px;white-space:nowrap}
+.fskille::before{content:"";height:1px;background:var(--line);flex:0 0 10px}
+.fskille::after{content:"";height:1px;background:var(--line);flex:1}
+.frad.ventes{color:#7d8590;cursor:pointer}
+body.tv .fskille{font-size:.75vw;margin:1.6vh 0 1.2vh}
+
+/* ---------- oversikt (bare på bred skjerm) ---------- */
+.oversikt{display:none}
+.oversikt .tall{display:block;text-decoration:none;color:inherit}
+.oversikt .tall.bred{grid-column:1/-1;text-align:left;padding:10px 12px}
+.oversikt .tall.bred .n{font-size:24px}
+.oversikt .tall.bred .l{font-size:9.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.oversikt .tall.haster .n{color:var(--fail)}
+
+/* ---------- kort for én kilde ---------- */
+.blipkort{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:10px auto 0;max-width:340px;animation:inn .25s ease both}
+.bkhode{display:flex;justify-content:space-between;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;letter-spacing:.1em;margin-bottom:6px}
+.bkrad{display:flex;justify-content:space-between;gap:10px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--mut);padding:5px 0;border-top:1px solid var(--line)}
+.bkrad b{color:var(--ink)} .bkrad b.gul{color:var(--amber)} .bkrad b.gronn{color:var(--ok)} .bkrad b.rod{color:var(--fail)}
+.bkfeil{font-family:var(--mono);font-size:11px;color:var(--fail);padding:0 0 6px;overflow-wrap:anywhere}
+.bkjobb{display:block;background:var(--panel2);border:1px solid var(--amber-dim);border-radius:4px;padding:8px 10px;margin:6px 0;color:var(--ink);text-decoration:none;font-size:14px}
+.bkjobb::after{content:" ›";color:var(--amber)}
+.blip.valgt .prikk{stroke:var(--ink);stroke-width:1.6}
+.plukk{background:none;border:none;color:inherit;font-size:17px;line-height:1;min-width:44px;min-height:44px;margin:-10px -12px -10px 0;cursor:pointer;font-family:var(--mono)}
+
+/* ---------- boardingkort ---------- */
+body.kortaapent{overflow:hidden}
+#kort{position:fixed;inset:0;z-index:80}
+.kortbak{position:absolute;inset:0;background:rgba(0,0,0,.62)}
+.pass{
+  position:absolute;right:0;top:0;bottom:0;width:min(460px,100%);overflow-y:auto;overscroll-behavior:contain;
+  background:var(--bg);border-left:1px solid var(--line);padding:16px;outline:none;animation:passinn .28s ease both;
+}
+@keyframes passinn{from{transform:translateX(48px);opacity:0}to{transform:none;opacity:1}}
+@keyframes passopp{from{transform:translateY(64px);opacity:0}to{transform:none;opacity:1}}
+@media(max-width:699px){
+  .pass{left:0;top:auto;width:auto;max-height:92vh;border-left:none;border-top:1px solid var(--line);border-radius:14px 14px 0 0;
+    animation-name:passopp;padding:12px 12px calc(16px + env(safe-area-inset-bottom))}
+}
+.phode{
+  display:flex;justify-content:space-between;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.24em;
+  color:var(--paa-gul);background:var(--amber-fill);padding:10px 12px;border-radius:10px 10px 0 0;
+}
+.pkropp{background:var(--panel);border-inline:1px solid var(--line);padding:14px}
+.pfelt small{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:var(--mut);margin-bottom:3px;font-weight:400}
+.pfelt b{font-family:var(--mono);font-size:13.5px;letter-spacing:.06em;color:var(--ink);font-weight:700}
+.pfelt b .frist{font-size:13.5px}
+.pfelt .parb{color:var(--amber);font-size:16px;letter-spacing:.12em}
+.ptittel{font-size:21px;font-weight:700;line-height:1.25;margin:10px 0 16px;overflow-wrap:anywhere}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;margin-bottom:14px}
+.pingen{font-family:var(--mono);font-size:11px;color:var(--mut);letter-spacing:.08em}
+.plest{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--mut);margin-top:12px;line-height:1.5}
+/* perforeringen mellom kortet og talongen */
+.priv{
+  height:22px;position:relative;background-color:var(--panel);border-inline:1px solid var(--line);
+  background-image:linear-gradient(90deg,var(--line) 55%,transparent 0);background-size:11px 2px;background-repeat:repeat-x;background-position:0 50%;
+}
+.priv::before,.priv::after{content:"";position:absolute;top:0;width:22px;height:22px;border-radius:50%;background:var(--bg);border:1px solid var(--line)}
+.priv::before{left:-12px;clip-path:inset(0 0 0 50%)} .priv::after{right:-12px;clip-path:inset(0 50% 0 0)}
+.pstubb{background:var(--panel);border:1px solid var(--line);border-top:none;border-radius:0 0 10px 10px;padding:14px}
+.pstubb .flap{margin-top:2px}
+.psok{width:100%;margin-top:12px;min-height:52px;font-size:14px}
+.pissue{display:block;margin-top:12px;font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;color:var(--mut);line-height:1.5}
+.pstrek{height:34px;margin-top:16px;opacity:.5;background:repeating-linear-gradient(90deg,var(--ink) 0 2px,transparent 2px 5px,var(--ink) 5px 6px,transparent 6px 9px,var(--ink) 9px 12px,transparent 12px 14px)}
+.pprivat{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--mut);margin-top:8px;text-align:center}
+
+/* ---------- NY AVGANG ---------- */
+#avgang{position:fixed;inset:0;z-index:90;background:rgba(5,5,6,.92);display:flex;align-items:center;justify-content:center;cursor:pointer;animation:avinn .25s ease both}
+@keyframes avinn{from{opacity:0}to{opacity:1}}
+.avkort{
+  font-family:var(--mono);font-size:clamp(13px,3.1vw,34px);font-weight:700;color:var(--amber);
+  padding:1.3em 1.2em 1em;border:2px solid var(--amber);border-radius:10px;background:#0b0c0e;box-shadow:0 0 90px rgba(255,177,0,.28);max-width:96vw;
+}
+.avlinje{white-space:nowrap;line-height:1;margin-bottom:.34em}
+.avlinje .fl{padding:.28em .08em .22em;margin-right:.08em;animation:avland .34s ease-out both}
+@keyframes avland{from{transform:scaleY(.08);opacity:0}to{transform:none;opacity:1}}
+.avlinje.topp{margin-bottom:.9em} .avlinje.topp .fl:not(.blank){background:var(--amber);color:#0d0d0f}
+.avlinje.arb,.avlinje.avfrist{color:var(--ink)}
+.avhint{font-size:max(9.5px,.42em);letter-spacing:.22em;color:var(--mut);margin-top:1.1em;min-height:1em;font-weight:400}
+
+/* ---------- nettbrett: tavla over arbeidsgivere i to kolonner ---------- */
+@media(min-width:700px){
+  .board{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .board>.brow,.board>.brow:last-child{border-right:1px solid var(--line);border-bottom:1px solid var(--line);margin:0 -1px -1px 0}
+}
+
+/* ---------- kontrollrom: alt synlig på én bred skjerm ---------- */
+@media(min-width:1100px){
+  main{max-width:1500px;padding:0 20px}
+  body:not(.tv) main{
+    display:grid;grid-template-columns:clamp(280px,24vw,340px) minmax(0,1fr) clamp(280px,25vw,360px);column-gap:24px;align-items:start;
+    grid-template-rows:auto auto 1fr auto auto;
+    grid-template-areas:"scope board logg" "tall naa logg" "sok naa logg" "tavle tavle tavle" "vinduer radar kopi";
+  }
+  body:not(.tv) #skjerm,body:not(.tv) .skjerm{display:contents}
+  body:not(.tv) .scopekol{grid-area:scope;margin-top:16px;position:relative}
+  /* kortet for en kilde legger seg over tallene, så det ikke skyver resten av siden ned */
+  body:not(.tv) .blipkort{position:absolute;left:0;right:0;top:100%;z-index:20;box-shadow:0 14px 40px rgba(0,0,0,.45)}
+  body:not(.tv) .scope,body:not(.tv) .blipkort{max-width:none}
+  body:not(.tv) .tvpanel{grid-area:board;margin-top:16px}
+  body:not(.tv) #oversikt{grid-area:tall;display:grid;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:6px;margin-top:14px}
+  #soknader{grid-area:sok} #naa{grid-area:naa} #logg{grid-area:logg;margin-top:16px}
+  #tavle{grid-area:tavle} #vinduer{grid-area:vinduer} #radar{grid-area:radar} #kopi{grid-area:kopi}
+  #naa,#soknader,#logg,#vinduer,#radar,#kopi{max-width:none;margin-inline:0}
+  body:not(.tv) #soknader .teller{display:none}       /* tallene står i oversikten rett over */
+  #loggliste{max-height:min(76vh,860px);overflow-y:auto;border-radius:6px}
+  .board{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+
+/* ---------- tema: LYS ---------- */
+[data-tema="lys"]{
+  --bg:#f3f1ea;--panel:#ffffff;--panel2:#f1eee6;--line:#d5d1c5;
+  --amber:#8a5a00;--amber-dim:#c9a24a;--amber-fill:#ffb100;--paa-gul:#0d0d0f;
+  --ok:#17703f;--fail:#bd241d;--ink:#1b1c1f;--mut:#585e67;
+  --hode:rgba(243,241,234,.94);--topp:#f3f1ea;--stripe:rgba(0,0,0,.035);
+  --flap1:#ffffff;--flap2:#ece8dd;--plass:#8a8f97;
+}
+[data-tema="lys"] .flap{box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
+[data-tema="lys"] .brow.lit{background:rgba(255,177,0,.16)}
+[data-tema="lys"] .kortbak{background:rgba(30,30,34,.5)}
+
+/* ---------- tema: SKILT (flyplasskilt: svart på gult øverst, gult på svart ellers) ---------- */
+[data-tema="skilt"]{
+  --bg:#0f0f10;--panel:#1a1a1b;--panel2:#252526;--line:#3b3b3d;
+  --amber:#ffd400;--amber-dim:#8f7700;--amber-fill:#ffd400;--paa-gul:#111111;
+  --ok:#4ade80;--fail:#ff7a73;--ink:#ffffff;--mut:#b4b4b4;
+  --hode:#ffd400;--topp:#ffd400;--flap1:#2a2a2b;--flap2:#1f1f20;--plass:#77777a;
+  --body:"Helvetica Neue",Helvetica,Arial,sans-serif;
+}
+[data-tema="skilt"] header{
+  --amber:#111111;--amber-fill:#111111;--ink:#111111;--mut:#3d3300;--line:#111111;--ok:#0a5c2e;--fail:#a3120c;
+  backdrop-filter:none;-webkit-backdrop-filter:none;border-bottom:3px solid #111111;
+}
+[data-tema="skilt"] h2{background:var(--amber-fill);color:var(--paa-gul);padding:7px 10px;border-radius:3px;letter-spacing:.22em}
+[data-tema="skilt"] h2::before{content:"➔";height:auto;background:none;flex:0 0 auto;letter-spacing:0}
+[data-tema="skilt"] h2::after{display:none}
+[data-tema="skilt"] .flapboard,[data-tema="skilt"] #ticker,[data-tema="skilt"] .scope,[data-tema="skilt"] #avgang{--amber:#ffd400;--amber-dim:#8f7700}
+[data-tema="skilt"] body.tv header{background:var(--hode)}

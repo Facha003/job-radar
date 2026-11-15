@@ -9,6 +9,14 @@
     "bot_token": "",
     "chat_id": ""
   },
+  "windows": [
+    {"label": "ISS vikarbatch", "note": "historisk utlyst rundt desember og januar", "target": "iss", "opens": "2026-12-01"},
+    {"label": "SAS GH sommerbatch, servicemedarbeider", "note": "sist utlyst 28. desember, frist slutten av januar og midten av februar", "target": "sas", "opens": "2026-12-28"},
+    {"label": "Vy hovedbatch for sommer 2027", "note": "vinter og tidlig vår", "target": "vy", "opens": "2027-02-01"},
+    {"label": "Widerøe GH, OSL", "note": "tok over Lufthansa Group på OSL 1. oktober 2026, nye kontrakter betyr ofte nye folk. Ingen fast batch kjent ennå", "target": "wideroe", "opens": null},
+    {"label": "Norwegian / Red Handling, OSL", "note": "egen handling på OSL siden mars 2023. Ingen fast batch kjent ennå", "target": "norwegian", "opens": null},
+    {"label": "ISS tilkalling", "note": "dukker opp hele året, fortløpende vurdering, fart teller", "target": "iss", "opens": null}
+  ],
   "targets": [
     {
       "name": "Vy karriere",
