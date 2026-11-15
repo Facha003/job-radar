@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-15T10:54:25+00:00",
+  "generated": "2026-11-15T15:38:14+00:00",
   "channels": {
     "email": true,
     "push": true
@@ -61,7 +61,20 @@
           "text": "Lead Customer Service Agent, OSL",
           "title": "Lead Customer Service Agent, OSL",
           "link": "https://careers.norwegian.com/job-invite/3133/",
-          "deadline": null
+          "deadline": "2026-11-20",
+          "detail_link": "https://career2.successfactors.eu/career?company=norwegiana&career_ns=job_listing&career_job_req_id=3133",
+          "details_tried": "2026-11-15",
+          "details": {
+            "percent": "75 %",
+            "contract": "FAST",
+            "tags": [
+              "NORSK",
+              "ENGELSK",
+              "BAKGRUNNSSJEKK",
+              "SKIFT"
+            ],
+            "read": "2026-11-15"
+          }
         }
       ]
     },
@@ -133,10 +146,25 @@
     "2026-11-14T22:14:32+00:00",
     "2026-11-14T23:38:28+00:00",
     "2026-11-15T03:07:23+00:00",
-    "2026-11-15T10:54:25+00:00"
+    "2026-11-15T10:54:25+00:00",
+    "2026-11-15T15:38:14+00:00"
   ],
   "calendar": true,
   "events": [
+    {
+      "t": "2026-11-15T15:38:14+00:00",
+      "type": "deadline",
+      "target": "Norwegian (Red Handling)",
+      "text": "Frist funnet 20.11.2026: Lead Customer Service Agent, OSL",
+      "link": "https://careers.norwegian.com/job-invite/3133/"
+    },
+    {
+      "t": "2026-11-15T15:38:14+00:00",
+      "type": "check",
+      "target": "",
+      "text": "8 kilder sjekket, 1 ledig",
+      "link": ""
+    },
     {
       "t": "2026-11-15T10:54:25+00:00",
       "type": "check",
@@ -218,6 +246,20 @@
     },
     {
       "t": "2026-11-15T10:54:25+00:00",
+      "n": {
+        "vy": 23,
+        "iss": 10,
+        "sas": 2,
+        "norwegian": 17,
+        "wideroe": 4,
+        "avinor": 19,
+        "aviator": 3,
+        "nav": null
+      },
+      "fail": []
+    },
+    {
+      "t": "2026-11-15T15:38:14+00:00",
       "n": {
         "vy": 23,
         "iss": 10,
