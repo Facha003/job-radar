@@ -155,6 +155,7 @@
       "type": "successfactors",
       "feed": "https://career2.successfactors.eu/career?company=norwegiana&career_ns=job_listing_summary&resultType=XML",
       "job_link": "https://careers.norwegian.com/job-invite/{id}/",
+      "detail_link": "https://career2.successfactors.eu/career?company=norwegiana&career_ns=job_listing&career_job_req_id={id}",
       "url": "https://careers.norwegian.com/search/?q=&locationsearch=Gardermoen",
       "keywords": [
         "customer service agent",
