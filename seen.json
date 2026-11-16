@@ -27,17 +27,20 @@
       "link": "https://careers.norwegian.com/job/Gardermoen-Lead-Customer-Service-Agent%2C-OSL-2060/1376887057/"
     }
   ],
-  "heartbeat_week": "2026-W46",
+  "heartbeat_week": "2026-W47",
   "last_counts": {
-    "Vy karriere": 22,
-    "ISS portal": 7,
-    "SAS Ground Handling": 1,
-    "Norwegian (Red Handling)": 2,
-    "Widerøe Ground Handling": 2
+    "Vy karriere": 23,
+    "ISS portal": 10,
+    "SAS Ground Handling": 2,
+    "Norwegian (Red Handling)": 14,
+    "Widerøe Ground Handling": 3,
+    "Avinor": 16,
+    "Aviator": 3,
+    "NAV arbeidsplassen": null
   },
   "sources": {
     "NAV arbeidsplassen": {
-      "cursor": "0a46049f-4699-44f4-baa1-984181c1183c",
+      "cursor": "c3df4790-2e30-4dd8-81da-7bac0ae1d487",
       "open": {
         "2e9221a7-9014-435f-b3c3-9923d7a742af": {
           "pending": true,
