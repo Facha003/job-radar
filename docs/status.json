@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-16T19:55:03+00:00",
+  "generated": "2026-11-17T02:52:55+00:00",
   "channels": {
     "email": true,
     "push": true
@@ -15,7 +15,7 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 1,
-      "listings": 24,
+      "listings": 23,
       "open": []
     },
     {
@@ -54,7 +54,7 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 2,
-      "listings": 16,
+      "listings": 15,
       "open": [
         {
           "key": "Norwegian (Red Handling)|successfactors|3133",
@@ -141,7 +141,8 @@
     "2026-11-15T22:07:01+00:00",
     "2026-11-16T02:09:05+00:00",
     "2026-11-16T09:47:43+00:00",
-    "2026-11-16T19:55:03+00:00"
+    "2026-11-16T19:55:03+00:00",
+    "2026-11-17T02:52:55+00:00"
   ],
   "calendar": true,
   "windows": [
@@ -183,6 +184,20 @@
     }
   ],
   "events": [
+    {
+      "t": "2026-11-17T02:52:55+00:00",
+      "type": "reminder",
+      "target": "Norwegian (Red Handling)",
+      "text": "Frist om 3 dager: Lead Customer Service Agent, OSL",
+      "link": "https://careers.norwegian.com/job-invite/3133/"
+    },
+    {
+      "t": "2026-11-17T02:52:55+00:00",
+      "type": "check",
+      "target": "",
+      "text": "8 kilder sjekket, 1 ledig",
+      "link": ""
+    },
     {
       "t": "2026-11-16T19:55:03+00:00",
       "type": "check",
@@ -423,6 +438,20 @@
         "iss": 13,
         "sas": 2,
         "norwegian": 16,
+        "wideroe": 3,
+        "avinor": 16,
+        "aviator": 3,
+        "nav": null
+      },
+      "fail": []
+    },
+    {
+      "t": "2026-11-17T02:52:55+00:00",
+      "n": {
+        "vy": 23,
+        "iss": 13,
+        "sas": 2,
+        "norwegian": 15,
         "wideroe": 3,
         "avinor": 16,
         "aviator": 3,
