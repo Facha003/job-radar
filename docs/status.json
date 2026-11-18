@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-18T10:28:43+00:00",
+  "generated": "2026-11-18T19:00:24+00:00",
   "channels": {
     "email": true,
     "push": true
@@ -28,7 +28,7 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 5,
-      "listings": 13,
+      "listings": 16,
       "open": []
     },
     {
@@ -76,7 +76,7 @@
       "consecutive_failures": 0,
       "new_hits": 0,
       "total_seen": 0,
-      "listings": 2,
+      "listings": 3,
       "open": []
     },
     {
@@ -146,7 +146,8 @@
     "2026-11-17T11:31:39+00:00",
     "2026-11-17T20:00:00+00:00",
     "2026-11-18T02:21:17+00:00",
-    "2026-11-18T10:28:43+00:00"
+    "2026-11-18T10:28:43+00:00",
+    "2026-11-18T19:00:24+00:00"
   ],
   "calendar": true,
   "windows": [
@@ -188,6 +189,13 @@
     }
   ],
   "events": [
+    {
+      "t": "2026-11-18T19:00:24+00:00",
+      "type": "check",
+      "target": "",
+      "text": "8 kilder sjekket, 1 ledig",
+      "link": ""
+    },
     {
       "t": "2026-11-18T10:28:43+00:00",
       "type": "check",
@@ -541,6 +549,20 @@
         "sas": 2,
         "norwegian": 16,
         "wideroe": 2,
+        "avinor": 19,
+        "aviator": 4,
+        "nav": null
+      },
+      "fail": []
+    },
+    {
+      "t": "2026-11-18T19:00:24+00:00",
+      "n": {
+        "vy": 26,
+        "iss": 16,
+        "sas": 2,
+        "norwegian": 16,
+        "wideroe": 3,
         "avinor": 19,
         "aviator": 4,
         "nav": null
