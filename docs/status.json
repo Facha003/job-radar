@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-20T16:16:18+00:00",
+  "generated": "2026-11-20T22:44:04+00:00",
   "channels": {
     "email": true,
     "push": true
@@ -24,11 +24,11 @@
       "label": "ISS · ASSISTANSE",
       "sub": "OSLO LUFTHAVN / OSL",
       "url": "https://iss.attract.reachmee.com/jobs",
-      "ok": true,
-      "consecutive_failures": 0,
+      "ok": false,
+      "consecutive_failures": 1,
       "new_hits": 0,
       "total_seen": 5,
-      "listings": 14,
+      "error": "HTTP 500 INTERNAL SERVER ERROR",
       "open": []
     },
     {
@@ -153,7 +153,8 @@
     "2026-11-19T17:50:28+00:00",
     "2026-11-20T00:08:00+00:00",
     "2026-11-20T07:16:45+00:00",
-    "2026-11-20T16:16:18+00:00"
+    "2026-11-20T16:16:18+00:00",
+    "2026-11-20T22:44:04+00:00"
   ],
   "calendar": true,
   "windows": [
@@ -195,6 +196,20 @@
     }
   ],
   "events": [
+    {
+      "t": "2026-11-20T22:44:04+00:00",
+      "type": "fail",
+      "target": "ISS portal",
+      "text": "HTTP 500 INTERNAL SERVER ERROR",
+      "link": "https://iss.attract.reachmee.com/jobs"
+    },
+    {
+      "t": "2026-11-20T22:44:04+00:00",
+      "type": "check",
+      "target": "",
+      "text": "8 kilder sjekket, 1 ledig, 1 feilet",
+      "link": ""
+    },
     {
       "t": "2026-11-20T16:16:18+00:00",
       "type": "check",
@@ -707,6 +722,21 @@
         "nav": null
       },
       "fail": []
+    },
+    {
+      "t": "2026-11-20T22:44:04+00:00",
+      "n": {
+        "vy": 29,
+        "sas": 2,
+        "norwegian": 16,
+        "wideroe": 4,
+        "avinor": 21,
+        "aviator": 4,
+        "nav": null
+      },
+      "fail": [
+        "iss"
+      ]
     }
   ]
 }
