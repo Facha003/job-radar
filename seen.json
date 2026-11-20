@@ -40,21 +40,8 @@
   },
   "sources": {
     "NAV arbeidsplassen": {
-      "cursor": "6048662f-cadc-4dfe-b219-81e77dd62979",
-      "open": {
-        "2e9221a7-9014-435f-b3c3-9923d7a742af": {
-          "pending": true,
-          "title": "Trives du med kundeservice? Bli vår nye kassemedarbeider!",
-          "employer": "Adecco Karrieresenter",
-          "changed": "2026-10-21T08:13:23.831748+02:00",
-          "link": "https://arbeidsplassen.nav.no/stillinger/stilling/2e9221a7-9014-435f-b3c3-9923d7a742af",
-          "due": "",
-          "deadline": null,
-          "expires": "2026-11-20T12:50:20+01:00",
-          "detailed": true,
-          "rejected": true
-        }
-      }
+      "cursor": "4ea918df-6e8e-4391-8b55-ed03afd46312",
+      "open": {}
     }
   }
 }
