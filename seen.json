@@ -11,7 +11,7 @@
   ],
   "fail": {
     "Vy karriere": 0,
-    "ISS portal": 3,
+    "ISS portal": 4,
     "SAS Ground Handling": 0,
     "Norwegian (Red Handling)": 0,
     "Widerøe Ground Handling": 0,
@@ -40,7 +40,7 @@
   },
   "sources": {
     "NAV arbeidsplassen": {
-      "cursor": "4ec60414-ddb8-4825-864d-77da3a2dd35b",
+      "cursor": "ad3624bf-7cf5-4627-b58e-fdb04fe5cd84",
       "open": {}
     }
   }
