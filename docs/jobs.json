@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-20T22:44:04+00:00",
+  "generated": "2026-11-21T03:36:41+00:00",
   "jobs": [
     {
       "key": "Norwegian (Red Handling)|successfactors|3133",
@@ -27,7 +27,8 @@
       "reminded": [
         1,
         3
-      ]
+      ],
+      "missed": 1
     }
   ]
 }
