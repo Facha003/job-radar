@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-21T03:36:41+00:00",
+  "generated": "2026-11-21T11:49:49+00:00",
   "jobs": [
     {
       "key": "Norwegian (Red Handling)|successfactors|3133",
@@ -10,8 +10,8 @@
       "title": "Lead Customer Service Agent, OSL",
       "link": "https://careers.norwegian.com/job-invite/3133/",
       "last_seen": "2026-11-20T22:44:04+00:00",
-      "state": "open",
-      "closed_at": null,
+      "state": "closed",
+      "closed_at": "2026-11-21T11:49:49+00:00",
       "details": {
         "percent": "75 %",
         "contract": "FAST",
@@ -27,8 +27,7 @@
       "reminded": [
         1,
         3
-      ],
-      "missed": 1
+      ]
     }
   ]
 }
