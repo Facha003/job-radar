@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-22T03:30:40+00:00",
+  "generated": "2026-11-22T11:56:32+00:00",
   "channels": {
     "email": true,
     "push": true
@@ -25,7 +25,7 @@
       "sub": "OSLO LUFTHAVN / OSL",
       "url": "https://iss.attract.reachmee.com/jobs",
       "ok": false,
-      "consecutive_failures": 6,
+      "consecutive_failures": 7,
       "new_hits": 0,
       "total_seen": 5,
       "error": "HTTP 500 INTERNAL SERVER ERROR",
@@ -150,7 +150,8 @@
     "2026-11-21T11:49:49+00:00",
     "2026-11-21T18:28:32+00:00",
     "2026-11-21T23:34:13+00:00",
-    "2026-11-22T03:30:40+00:00"
+    "2026-11-22T03:30:40+00:00",
+    "2026-11-22T11:56:32+00:00"
   ],
   "calendar": true,
   "windows": [
@@ -192,6 +193,13 @@
     }
   ],
   "events": [
+    {
+      "t": "2026-11-22T11:56:32+00:00",
+      "type": "check",
+      "target": "",
+      "text": "8 kilder sjekket, 0 ledig, 1 feilet",
+      "link": ""
+    },
     {
       "t": "2026-11-22T03:30:40+00:00",
       "type": "check",
@@ -838,6 +846,21 @@
     },
     {
       "t": "2026-11-22T03:30:40+00:00",
+      "n": {
+        "vy": 26,
+        "sas": 1,
+        "norwegian": 13,
+        "wideroe": 4,
+        "avinor": 21,
+        "aviator": 4,
+        "nav": null
+      },
+      "fail": [
+        "iss"
+      ]
+    },
+    {
+      "t": "2026-11-22T11:56:32+00:00",
       "n": {
         "vy": 26,
         "sas": 1,
