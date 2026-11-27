@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-27T11:30:23+00:00",
+  "generated": "2026-11-27T20:17:02+00:00",
   "channels": {
     "email": true,
     "push": true
@@ -63,11 +63,11 @@
       "label": "WIDERØE GROUND HANDLING",
       "sub": "INNSJEKK OG GATE / OSL · LUFTHANSA FRA OKT 2026",
       "url": "https://jobbiwideroe.no/karriere-i-wideroe/bakkepersonell/",
-      "ok": true,
-      "consecutive_failures": 0,
+      "ok": false,
+      "consecutive_failures": 1,
       "new_hits": 0,
       "total_seen": 0,
-      "listings": 7,
+      "error": "HTTP 403 Forbidden",
       "open": []
     },
     {
@@ -165,7 +165,8 @@
     "2026-11-26T10:45:19+00:00",
     "2026-11-26T19:54:00+00:00",
     "2026-11-27T02:46:20+00:00",
-    "2026-11-27T11:30:23+00:00"
+    "2026-11-27T11:30:23+00:00",
+    "2026-11-27T20:17:02+00:00"
   ],
   "calendar": true,
   "windows": [
@@ -207,6 +208,20 @@
     }
   ],
   "events": [
+    {
+      "t": "2026-11-27T20:17:02+00:00",
+      "type": "fail",
+      "target": "Widerøe Ground Handling",
+      "text": "HTTP 403 Forbidden",
+      "link": "https://jobbiwideroe.no/karriere-i-wideroe/bakkepersonell/"
+    },
+    {
+      "t": "2026-11-27T20:17:02+00:00",
+      "type": "check",
+      "target": "",
+      "text": "8 kilder sjekket, 0 ledig, 1 feilet",
+      "link": ""
+    },
     {
       "t": "2026-11-27T11:30:23+00:00",
       "type": "check",
@@ -1188,6 +1203,21 @@
         "nav": null
       },
       "fail": []
+    },
+    {
+      "t": "2026-11-27T20:17:02+00:00",
+      "n": {
+        "vy": 23,
+        "iss": 18,
+        "sas": 2,
+        "norwegian": 14,
+        "avinor": 21,
+        "aviator": 5,
+        "nav": null
+      },
+      "fail": [
+        "wideroe"
+      ]
     }
   ]
 }
