@@ -14,7 +14,7 @@
     "ISS portal": 0,
     "SAS Ground Handling": 0,
     "Norwegian (Red Handling)": 0,
-    "Widerøe Ground Handling": 1,
+    "Widerøe Ground Handling": 0,
     "Avinor": 0,
     "Aviator": 0,
     "NAV arbeidsplassen": 0
@@ -40,7 +40,7 @@
   },
   "sources": {
     "NAV arbeidsplassen": {
-      "cursor": "00c9aade-8a88-4956-8b6b-cef0d79b572d",
+      "cursor": "fa15d9d0-a5a0-4bed-b5d9-5c841802de16",
       "open": {}
     }
   }
